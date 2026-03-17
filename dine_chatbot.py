@@ -10,9 +10,16 @@ from typing import List, Dict, Any, Optional, Tuple, Set
 import io  # Make sure this line is present
 import io
 
+
+
 # Optional: OpenAI (only used if you have billing/credits enabled)
 import os
 from openai import OpenAI
+
+from flask import Flask, request, render_template_string
+
+# Create Flask app
+app = Flask(__name__)
 
 try:
     import openai
@@ -1207,5 +1214,71 @@ def main():
         for p, data in principles.items():
             print(f"• {p}: {data['hits']} occurrences")
 
+# HTML template for the web interface
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Diné Cultural Chatbot</title>
+    <style>
+        body { font-family: Arial; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .question { margin: 20px 0; }
+        textarea { width: 100%; height: 100px; }
+        button { padding: 10px 20px; background: #4CAF50; color: white; border: none; cursor: pointer; }
+        .answer { background: #f9f9f9; padding: 20px; border-radius: 5px; margin-top: 20px; }
+        .sources { font-size: 0.9em; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>Diné Cultural Chatbot</h1>
+    <div class="question">
+        <form method="POST">
+            <textarea name="question" placeholder="Ask about Diné culture...">{{ question }}</textarea><br>
+            <button type="submit">Ask</button>
+        </form>
+    </div>
+    {% if answer %}
+    <div class="answer">
+        <h3>Answer:</h3>
+        {{ answer | safe }}
+    </div>
+    {% endif %}
+</body>
+</html>
+"""
+
+@app.route('/', methods=['GET', 'POST'])
+def home():
+    question = ""
+    answer = ""
+    
+    if request.method == 'POST':
+        question = request.form.get('question', '')
+        
+        # Check seasonal restrictions
+        if SEASONAL_MODE and is_hibernation_season() and mentions_animals(question):
+            answer = "During winter months (November-March), we avoid discussing certain animals per Diné tradition. Please ask about other aspects of Diné culture."
+        else:
+            # Gather sources
+            sources = gather_sources(question)
+            principles = detect_principles(sources)
+            
+            # Generate answer
+            if OPENAI_AVAILABLE and client is not None:
+                answer = answer_with_openai(question, sources)
+            else:
+                # Capture print_fallback_answer output
+                import io
+                import sys
+                captured = io.StringIO()
+                sys.stdout = captured
+                print_fallback_answer(question, sources)
+                sys.stdout = sys.__stdout__
+                answer = captured.getvalue().replace('\n', '<br>')
+    
+    return render_template_string(HTML_TEMPLATE, question=question, answer=answer)
+
 if __name__ == "__main__":
-    main()
+    # This is for local development only
+    # Render uses gunicorn to run the app
+    app.run(host='0.0.0.0', port=5000, debug=True)
