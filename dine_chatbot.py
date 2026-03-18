@@ -1090,6 +1090,7 @@ def print_fallback_answer(question: str, sources: List[Dict[str, Any]]):
             print(f"[{i}] {display_name}")
     print()
 
+    # Flask web app for Render deployment
     # Show a relevant excerpt from the primary source
     print("Relevant excerpt:")
     excerpt = extract_relevant_excerpt(primary_source, question)
