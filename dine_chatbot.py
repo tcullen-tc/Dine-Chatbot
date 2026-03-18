@@ -1127,56 +1127,6 @@ def answer_with_openai(question: str, sources: List[Dict[str, Any]]) -> str:
     if OPENAI_AVAILABLE:
 
 
-def main():
-    """Main entry point for the application."""
-    question = input("Ask a question: ")
-
-    # Check seasonal restrictions
-    if SEASONAL_MODE and is_hibernation_season() and mentions_animals(question):
-        print("\nDuring winter months (November-March), we avoid discussing certain animals per Diné tradition.")
-        print("This respects the animals' hibernation and rest period, as some stories are not shared during this time.")
-        print("Please ask about other aspects of Diné culture, such as kinship (k'é), harmony (hózhó), or community responsibilities.")
-        return
-
-    # Reset variables for each new question
-    sources = []
-    principles = {}
-
-    print("\nSearching allowed Diné sources...\n")
-    sources = gather_sources(question)
-
-    print(f"Found {len(sources)} sources\n")
-    for i, s in enumerate(sources, start=1):
-        print(f"[{i}] {s.get('url','')}")
-
-    print("\nGenerating answer...\n")
-    principles = detect_principles(sources)
-
-    # Try OpenAI if available, otherwise use fallback
-    try:
-        if OPENAI_AVAILABLE and client is not None:
-            print("\n🧠 Synthesizing answer with OpenAI...\n")
-            answer = answer_with_openai(question, sources)
-            print("\n" + "="*60)
-            print(answer)
-            print("="*60)
-        else:
-            print_fallback_answer(question, sources)
-    except Exception as e:
-        print(f"\nOpenAI failed: {e}")
-        print_fallback_answer(question, sources)
-
-    # Show trusted media if any
-    if TRUSTED_MEDIA:
-        print("\n--- Trusted Media ---")
-        for media in TRUSTED_MEDIA:
-            print(f"{media['title']} ({media['source']}): {media['url']}")
-
-    # Show detected principles for debugging
-    if principles:
-        print("\n--- Cultural Principles Detected ---")
-        for p, data in principles.items():
-            print(f"• {p}: {data['hits']} occurrences")
 
 # HTML template for the web interface
 HTML_TEMPLATE = """
