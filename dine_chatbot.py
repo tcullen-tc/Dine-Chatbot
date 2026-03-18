@@ -14,7 +14,7 @@ import io
 
 # Optional: OpenAI (only used if you have billing/credits enabled)
 import os
-from openai import OpenAI
+from openai import Openai
 
 from flask import Flask, request, render_template_string
 
