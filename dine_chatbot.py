@@ -1124,7 +1124,6 @@ def answer_with_openai(question: str, sources: List[Dict[str, Any]]) -> str:
         excerpt = source.get('text', '')[:1500]  # First 1500 chars each
         context += f"\n--- {label} ---\n{excerpt}\n"
     
-    if OPENAI_AVAILABLE:
 
 
 
