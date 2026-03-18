@@ -14,15 +14,9 @@ import io
 
 # Optional: OpenAI (only used if you have billing/credits enabled)
 import os
-from openai import Openai
-
-from flask import Flask, request, render_template_string
-
-# Create Flask app
-app = Flask(__name__)
+import openai
 
 try:
-    import openai
     # Try to load API key from file
     def load_openai_key():
         try:
@@ -33,16 +27,13 @@ try:
     
     OPENAI_API_KEY = load_openai_key()
     if OPENAI_API_KEY:
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        openai.api_key = OPENAI_API_KEY
         OPENAI_AVAILABLE = True
         print("✅ OpenAI initialized with API key")
     else:
-        client = None
         OPENAI_AVAILABLE = False
         print("ℹ️ OpenAI key not found - using local knowledge base only")
 except ImportError:
-    openai = None
-    client = None
     OPENAI_AVAILABLE = False
     print("ℹ️ OpenAI not installed - using local knowledge base only")
 
@@ -1123,45 +1114,17 @@ def print_fallback_answer(question: str, sources: List[Dict[str, Any]]):
 
 def answer_with_openai(question: str, sources: List[Dict[str, Any]]) -> str:
     """Generate a synthesized answer using OpenAI based on local documents."""
-    if not OPENAI_AVAILABLE or client is None:
+    if not OPENAI_AVAILABLE:
         return "OpenAI is not available."
-
+    
     # Build context from your top sources
     context = ""
     for i, source in enumerate(sources[:3]):  # Use top 3 sources
         label = source.get('label', source.get('url', f'Source {i+1}'))
         excerpt = source.get('text', '')[:1500]  # First 1500 chars each
         context += f"\n--- {label} ---\n{excerpt}\n"
-
-    prompt = f"""Based ONLY on the following source excerpts, answer this question about Diné culture:
-
-QUESTION: {question}
-
-SOURCES:
-{context}
-
-INSTRUCTIONS:
-1. Synthesize information from the sources into a clear, well-written answer.
-2. Use complete, flowing paragraphs, not bullet points or raw excerpts.
-3. If sources contain different perspectives, explain them.
-4. If the information isn't in the sources, say so.
-5. Write in a helpful, educational, and respectful tone.
-
-ANSWER:"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a knowledgeable guide to Diné culture who synthesizes information from provided sources into clear, educational answers."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=800
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"OpenAI Error: {e}"
+    
+    pif OPENAI_AVAILABLE:
 
 
 def main():
