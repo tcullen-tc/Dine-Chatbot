@@ -10,7 +10,10 @@ from typing import List, Dict, Any, Optional, Tuple, Set
 import io  # Make sure this line is present
 import io
 
+from flask import Flask, request, render_template_string
 
+# Create Flask app
+app = Flask(__name__)
 
 # Optional: OpenAI (only used if you have billing/credits enabled)
 import os
