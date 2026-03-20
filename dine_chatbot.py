@@ -1136,9 +1136,6 @@ def answer_with_openai(question: str, sources: List[Dict[str, Any]]) -> str:
         excerpt = source.get('text', '')[:1500]  # First 1500 chars each
         context += f"\n--- {label} ---\n{excerpt}\n"
     
-
-
-
 # HTML template for the web interface
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -1189,7 +1186,7 @@ def home():
             principles = detect_principles(sources)
             
             # Generate answer
-            if OPENAI_AVAILABLE and client is not None:
+            if OPENAI_AVAILABLE:
                 answer = answer_with_openai(question, sources)
             else:
                 # Capture print_fallback_answer output
