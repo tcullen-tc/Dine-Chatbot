@@ -1176,7 +1176,7 @@ def home():
             
             # Generate answer
             if OPENAI_AVAILABLE:
-                answer = answer_with_openai(question, sources)
+               answer = answer_with_openai(question, sources, principles)
             else:
                 # Capture print_fallback_answer output
                 import io
