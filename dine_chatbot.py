@@ -1176,6 +1176,7 @@ def home():
     
     if request.method == 'POST':
         question = request.form.get('question', '')
+         print(f"OPENAI_AVAILABLE = {OPENAI_AVAILABLE}")   # <-- ADD THIS LINE
         
         # Check seasonal restrictions
         if SEASONAL_MODE and is_hibernation_season() and mentions_animals(question):
