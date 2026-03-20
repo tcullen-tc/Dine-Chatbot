@@ -781,7 +781,7 @@ def gather_sources(question: str, max_pages: int = 6) -> List[Dict[str, Any]]:
 # ----------------------------------------
 def answer_with_openai(question: str, sources: List[Dict[str, Any]], principles: Dict[str, Any]) -> str:
     """Generate answer using OpenAI API based on provided sources."""
-    if not OPENAI_AVAILABLE or openai is None:
+    if not OPENAI_AVAILABLE:
         raise RuntimeError("OpenAI package not installed in this environment.")
 
     api_key = load_api_key_from_file()
@@ -1121,19 +1121,8 @@ def print_fallback_answer(question: str, sources: List[Dict[str, Any]]):
     print("Cultural principles detected in sources:")
     for p, data in principles.items():
         print(f"  • {p}: {data['hits']} occurrences")
-    print()
+    print() 
 
-def answer_with_openai(question: str, sources: List[Dict[str, Any]]) -> str:
-    """Generate a synthesized answer using OpenAI based on local documents."""
-    if not OPENAI_AVAILABLE:
-        return "OpenAI is not available."
-    
-    # Build context from your top sources
-    context = ""
-    for i, source in enumerate(sources[:3]):  # Use top 3 sources
-        label = source.get('label', source.get('url', f'Source {i+1}'))
-        excerpt = source.get('text', '')[:1500]  # First 1500 chars each
-        context += f"\n--- {label} ---\n{excerpt}\n"
     
 # HTML template for the web interface
 HTML_TEMPLATE = """
