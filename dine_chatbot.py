@@ -21,14 +21,23 @@ import openai
 
 try:
     # Try to load API key from file
-    def load_openai_key():
-        try:
-            with open(os.path.expanduser("~/openai_key.txt"), "r") as f:
-                return f.read().strip()
-        except:
-            return None
+   def load_openai_key():
+    # First check environment variable (for Render)
+    env_key = os.environ.get("OPENAI_API_KEY")
+    if env_key:
+        print("✅ Using OpenAI key from environment variable")
+        return env_key
     
-    OPENAI_API_KEY = load_openai_key()
+    # Fallback to file (for local development)
+    try:
+        with open(os.path.expanduser("~/openai_key.txt"), "r") as f:
+            print("✅ Using OpenAI key from file")
+            return f.read().strip()
+    except:
+        print("⚠️ No OpenAI key found")
+        return None
+
+OPENAI_API_KEY = load_openai_key()
     if OPENAI_API_KEY:
         openai.api_key = OPENAI_API_KEY
         OPENAI_AVAILABLE = True
