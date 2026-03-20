@@ -8,7 +8,6 @@ from html.parser import HTMLParser
 from datetime import datetime, date
 from typing import List, Dict, Any, Optional, Tuple, Set
 import io  # Make sure this line is present
-import io
 
 from flask import Flask, request, render_template_string
 
@@ -105,9 +104,17 @@ def simple_summary(sources: List[Dict[str, Any]], max_sentences: int = 3) -> str
     return " ".join(sentences)
 
 def load_api_key_from_file(path="openai_key.txt"):
-    """Load OpenAI API key from file."""
+    """Load OpenAI API key from environment or file."""
+    # First try environment variable (for Render)
+    env_key = os.environ.get("OPENAI_API_KEY")
+    if env_key:
+        print("✅ Using OpenAI key from environment variable")
+        return env_key
+    
+    # Fallback to file (for local development)
     try:
         with open(path, "r") as f:
+            print("✅ Using OpenAI key from file")
             return f.read().strip()
     except FileNotFoundError:
         print(f"Warning: API key file {path} not found")
