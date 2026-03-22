@@ -1194,11 +1194,11 @@ def home():
             # Also check if question is about social/human topics
             social_topics = ['friend', 'family', 'relationship', 'respect', 'help', 'care', 'support', 'community', 'together', 'marraige']
             
-            is_dine_question = any(keyword in question.lower() for keyword in dine_keywords)
-            is_social_question = any(keyword in question.lower() for keyword in social_topics)
+            # Check if question is clearly off-topic (block obvious non-Diné questions)
+            off_topic_keywords = ['martha stewart', 'sports', 'politics', 'movie', 'music', 'celebrity', 'business', 'stock market', 'computer', 'phone', 'car', 'weather', 'sports team']
+            is_off_topic = any(keyword in question.lower() for keyword in off_topic_keywords)
             
-            # If it's NOT a Diné or social question, refuse
-            if not is_dine_question and not is_social_question:
+            if is_off_topic:
                 answer = "I'm designed to answer questions about Diné (Navajo) culture, language, and traditions. Please ask about topics like k'é (kinship), hózhó (harmony), Diné history, or traditional practices."
             else:
                 # Gather sources
