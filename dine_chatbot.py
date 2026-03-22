@@ -1177,22 +1177,28 @@ def home():
         if SEASONAL_MODE and is_hibernation_season() and mentions_animals(question):
             answer = "During winter months (November-March), we avoid discussing certain animals per Diné tradition. Please ask about other aspects of Diné culture."
         else:
-            # Gather sources
-            sources = gather_sources(question)
-            principles = detect_principles(sources)
-            
-            # Generate answer
-            if OPENAI_AVAILABLE:
-               answer = answer_with_openai(question, sources, principles)
-            else:
-                # Capture print_fallback_answer output
-                import io
-                import sys
-                captured = io.StringIO()
-                sys.stdout = captured
-                print_fallback_answer(question, sources)
-                sys.stdout = sys.__stdout__
-                answer = captured.getvalue().replace('\n', '<br>')
+               # Gather sources
+    sources = gather_sources(question)
+    principles = detect_principles(sources)
+
+    # Check if we have any valid sources
+    if not sources or not any(s.get('text') for s in sources):
+        answer = "I couldn't find any relevant sources about that topic in my allowed domains. Please ask about Diné culture, language, or traditions."
+    else:
+        # Generate answer
+        if OPENAI_AVAILABLE:
+            answer = answer_with_openai(question, sources, principles)
+        else:
+            # Capture print_fallback_answer output
+            import io
+            import sys
+            captured = io.StringIO()
+            sys.stdout = captured
+            print_fallback_answer(question, sources)
+            sys.stdout = sys.__stdout__
+            answer = captured.getvalue().replace('\n', '<br>')
+    
+    return render_template_string(HTML_TEMPLATE, question=question, answer=answer)
     
     return render_template_string(HTML_TEMPLATE, question=question, answer=answer)
 
