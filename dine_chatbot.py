@@ -1192,7 +1192,7 @@ def home():
             ]
             
             # Also check if question is about social/human topics
-            social_topics = ['friend', 'family', 'relationship', 'respect', 'help', 'care', 'support', 'community', 'together']
+            social_topics = ['friend', 'family', 'relationship', 'respect', 'help', 'care', 'support', 'community', 'together', 'marraige']
             
             is_dine_question = any(keyword in question.lower() for keyword in dine_keywords)
             is_social_question = any(keyword in question.lower() for keyword in social_topics)
