@@ -820,17 +820,20 @@ def answer_with_openai(question: str, sources: List[Dict[str, Any]], principles:
 
     system = (
         "You are a helpful assistant that answers ONLY using the provided sources.\n"
-        "Begin your response with a brief (2–3 sentence) summary, "
-        "then expand with details and cite sources like [1], [2].\n"
+        "Write a detailed, well-structured answer of 2-3 paragraphs.\n"
+        "Start with a brief overview, then expand with specific details from the sources.\n"
+        "Use paragraphs to separate different aspects of the answer.\n"
+        "Cite sources like [1], [2] within the text.\n"
     )
 
     principles_text = ", ".join(principles.keys()) if principles else "none detected"
-
+    
     prompt = (
         f"Question: {question}\n\n"
         f"Detected Diné cultural principles: {principles_text}\n\n"
         f"Allowed sources:\n{sources_block}\n\n"
-        "Answer using ONLY the sources above. If cultural principles apply, explain them. Include citations like [1]."
+        "Answer using ONLY the sources above. Provide a detailed response of 2-3 paragraphs. "
+        "Include specific examples and cite sources like [1], [2]."
     )
 
     try:
