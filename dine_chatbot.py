@@ -207,7 +207,7 @@ def load_documents_from_folder():
                 "url": f"local:{filename}",
                 "domain": "local-documents",
                 "tier": "document",
-                "trust": 0.95,  # High trust for your documents
+                "trust": 1.0,  # High trust for your documents
                 "label": f"📚 {filename}",
                 "text": content
             })
