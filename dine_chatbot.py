@@ -1188,6 +1188,7 @@ def home():
                 'respect', 'harmony', 'balance', 'community',
                 'teaching', 'value', 'values', 'way', 'ways',
                 'how do', 'how to', 'what is', 'meaning of'
+                'marriage', 'wedding', 'husband', 'wife', 'partner', 'spouse'
             ]
             
             # Also check if question is about social/human topics
