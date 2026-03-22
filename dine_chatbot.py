@@ -1176,9 +1176,31 @@ def home():
         if SEASONAL_MODE and is_hibernation_season() and mentions_animals(question):
             answer = "During winter months (November-March), we avoid discussing certain animals per Diné tradition. Please ask about other aspects of Diné culture."
         else:
-            # Check if question is about Diné culture
-            dine_keywords = ['diné', 'navajo', 'k\'é', 'k\'e', 'hozho', 'hózhó', 'clan', 'weaving', 'ceremony', 'traditional', 'long walk', 'bosque redondo', 'treaty']
-            is_dine_question = any(keyword in question.lower() for keyword in dine_keywords)
+            # Check if question is about Diné culture or related topics
+dine_keywords = [
+    'diné', 'navajo', 'k\'é', 'k\'e', 'hozho', 'hózhó', 
+    'clan', 'weaving', 'ceremony', 'traditional', 
+    'long walk', 'bosque redondo', 'treaty',
+    'friend', 'friends', 'family', 'kinship', 'relationship', 
+    'respect', 'harmony', 'balance', 'community',
+    'teaching', 'teaching', 'value', 'values', 'way', 'ways',
+    'how do', 'how to', 'what is', 'meaning of'
+]
+
+# Also check if question is about social/human topics that can be answered with Diné principles
+social_topics = ['friend', 'family', 'relationship', 'respect', 'help', 'care', 'support', 'community', 'together']
+
+is_dine_question = any(keyword in question.lower() for keyword in dine_keywords)
+is_social_question = any(keyword in question.lower() for keyword in social_topics)
+
+# If it's a social question, we'll still process it (it will use Diné sources)
+if not is_dine_question and not is_social_question:
+    answer = "I'm designed to answer questions about Diné (Navajo) culture, language, and traditions. Please ask about topics like k'é (kinship), hózhó (harmony), Diné history, or traditional practices."
+else:
+    # Proceed with the normal search and answer process
+    sources = gather_sources(question)
+    principles = detect_principles(sources)
+    # ... rest of the code
             
             if not is_dine_question:
                 answer = "I'm designed to answer questions about Diné (Navajo) culture, language, and traditions. Please ask about topics like k'é (kinship), hózhó (harmony), Diné history, or traditional practices."
