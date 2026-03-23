@@ -203,14 +203,17 @@ def load_documents_from_folder():
                 content = f.read()
             
             filename = os.path.basename(file_path)
-            documents.append({
-                "url": f"local:{filename}",
-                "domain": "local-documents",
-                "tier": "document",
-                "trust": 1.0,  # High trust for your documents
-                "label": f"📚 {filename}",
-                "text": content
-            })
+          # Check if this is a story file
+is_story = 'story' in filename.lower() or 'hero' in filename.lower()
+
+documents.append({
+    "url": f"local:{filename}",
+    "domain": "local-documents",
+    "tier": "document",
+    "trust": 1.00 if is_story else 0.98,  # Stories get higher trust
+    "label": f"📚 {filename}",
+    "text": content
+})
             print(f"✅ Loaded document: {filename}")
         except Exception as e:
             print(f"❌ Error loading {file_path}: {e}")
