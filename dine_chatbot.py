@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Create Flask app
 app = Flask(__name__)
 
-# Did You Know facts (new addition)
+# Did You Know facts (NEW - for the fact box)
 DID_YOU_KNOW_FACTS = [
     "The Navajo language was used as a code during WWII by the famous Code Talkers - it was never broken!",
     "K'é (kinship) extends beyond blood relations to include all of creation.",
@@ -34,7 +34,7 @@ DID_YOU_KNOW_FACTS = [
     "In Diné tradition, the number four is sacred - representing the four directions.",
 ]
 
-# Optional: OpenAI
+# Optional: OpenAI (only used if you have billing/credits enabled)
 try:
     import openai
     OPENAI_INSTALLED = True
@@ -62,7 +62,7 @@ except ImportError:
     PDF_SUPPORT = False
 
 # ----------------------------
-# Configure allowlist - ORIGINAL WORKING DOMAINS
+# 1) Configure your allowlist - ORIGINAL WORKING DOMAINS
 # ----------------------------
 ALLOWED_DOMAINS = [
     # Official Navajo Nation / Diné Government
@@ -106,22 +106,34 @@ ALLOWED_DOMAINS = [
     "traditionalnavajoteachings.org",
 ]
 
-# Domain trust scores
+# Trust tiers
 DOMAIN_TRUST = {
-    "navajo-nsn.gov": 1.00,
-    "courts.navajo-nsn.gov": 1.00,
-    "navajocourts.org": 1.00,
-    "nnwo.org": 0.95,
-    "dinecollege.edu": 0.95,
-    "navajolanguageacademy.org": 0.92,
-    "navajotimes.com": 0.85,
-    "ictnews.org": 0.82,
-    "indiancountrytoday.com": 0.82,
-    "americanindian.si.edu": 0.80,
-    "loc.gov": 0.80,
+    "navajo-nsn.gov": ("official", 1.00),
+    "courts.navajo-nsn.gov": ("official", 1.00),
+    "navajocourts.org": ("official", 1.00),
+    "nnwo.org": ("official", 0.95),
+    "dinecollege.edu": ("education", 0.95),
+    "navajolanguageacademy.org": ("education", 0.92),
+    "roughrock.k12.az.us": ("education", 0.88),
+    "nau.edu": ("education", 0.90),
+    "navajotech.edu": ("education", 0.88),
+    "unm.edu": ("education", 0.85),
+    "navajotimes.com": ("dine_media", 0.85),
+    "navajocodetalkers.org": ("dine_org", 0.88),
+    "discovernavajo.com": ("tourism", 0.75),
+    "navajohopiobserver.com": ("dine_media", 0.85),
+    "dineta.com": ("dine_media", 0.85),
+    "ncai.org": ("indigenous_org", 0.80),
+    "ictnews.org": ("indigenous_media", 0.82),
+    "indiancountrytoday.com": ("indigenous_media", 0.82),
+    "nativeamericannews.net": ("indigenous_media", 0.75),
+    "americanindian.si.edu": ("museum", 0.80),
+    "loc.gov": ("archive", 0.80),
+    "pbs.org": ("public_media", 0.75),
+    "smithsonianmag.com": ("museum_media", 0.70),
 }
 
-USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15"
+USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1"
 
 # Document search configuration
 DOCUMENTS_FOLDER = "/home/tony-cullen/dine_documents"
@@ -169,8 +181,10 @@ def search_documents(question, documents):
         # Special boosts for specific topics
         if "black god" in question_lower and ("black god" in text_lower or "haashch" in text_lower):
             score += 50
-        if "stars" in question_lower and ("star" in text_lower or "constellation" in text_lower):
+        if "star" in question_lower and ("star" in text_lower or "constellation" in text_lower):
             score += 30
+        if "long walk" in question_lower and ("long walk" in text_lower or "bosque redondo" in text_lower):
+            score += 40
             
         if score > 10:
             doc_copy = doc.copy()
@@ -234,10 +248,24 @@ def is_allowed(url: str) -> bool:
 
 def trust_for_url(url: str):
     host = domain_of(url)
-    for d, score in DOMAIN_TRUST.items():
+    for d, (tier, score) in DOMAIN_TRUST.items():
         if host == d or host.endswith("." + d):
             return score
     return 0.50
+
+def label_for_source(domain: str, tier: str) -> str:
+    tier_labels = {
+        "official": "Navajo Nation (Official)",
+        "education": "Diné Education",
+        "dine_media": "Diné Media",
+        "dine_org": "Diné Organization",
+        "tourism": "Tourism / Information",
+        "indigenous_media": "Indigenous Journalism",
+        "museum": "Museum / Institution",
+        "archive": "Archive",
+        "public_media": "Public Media",
+    }
+    return tier_labels.get(tier, domain)
 
 def ddg_search(query: str, max_results: int = 8) -> List[str]:
     """Search DuckDuckGo and return list of result URLs."""
@@ -334,13 +362,14 @@ def gather_sources(question: str, max_pages: int = 6) -> List[Dict[str, Any]]:
     sources.sort(key=lambda s: s.get("trust", 0), reverse=True)
     return sources
 
-def generate_fallback_answer(question: str, sources: List[Dict[str, Any]]) -> str:
-    """Generate formatted answer from sources."""
+def print_fallback_answer(question: str, sources: List[Dict[str, Any]]) -> str:
+    """Generate formatted answer from sources (ORIGINAL WORKING FUNCTION with better formatting)."""
     if not sources:
         return """
         <div style="line-height: 1.6;">
             <p><strong>📖 I couldn't find any relevant sources.</strong></p>
-            <p>Please try rephrasing your question or ask about topics like:</p>
+            <p>Please try rephrasing your question or try one of the example questions above.</p>
+            <p>You can ask about:</p>
             <ul>
                 <li>Who is Black God?</li>
                 <li>How were the stars created?</li>
@@ -358,65 +387,65 @@ def generate_fallback_answer(question: str, sources: List[Dict[str, Any]]) -> st
     if not text or len(text) < 50:
         return "I found a source but couldn't extract enough text. Please try a different question."
     
-    # Clean up the text
-    text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
-    text = text.strip()
+    # Split into paragraphs
+    paragraphs = [p for p in text.split('\n\n') if len(p) > 100]
     
-    # Split into sentences for better formatting
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+    # Find relevant paragraphs based on question keywords
+    question_lower = question.lower()
+    keywords = [w for w in question_lower.split() if len(w) > 3 and w not in {'the','what','how','why','does','tell','about'}]
     
-    # Find relevant sentences based on question
-    q_lower = question.lower()
-    keywords = [w for w in q_lower.split() if len(w) > 3 and w not in {'the','what','how','why','does','tell','about'}]
-    
-    # Special keyword boosts
-    if "star" in q_lower:
-        keywords.extend(["star", "stars", "constellation", "sky", "heavens", "creation"])
-    if "black god" in q_lower:
+    # Add special keywords based on question
+    if "black god" in question_lower or "haashch" in question_lower:
         keywords.extend(["black god", "haashch", "fire god", "darkness"])
+    if "star" in question_lower:
+        keywords.extend(["star", "stars", "constellation", "sky", "heavens"])
+    if "long walk" in question_lower:
+        keywords.extend(["long walk", "bosque redondo", "hweeldi", "1864"])
     
-    # Score each sentence
-    scored_sentences = []
-    for sentence in sentences:
-        if len(sentence) < 30:
-            continue
-        s_lower = sentence.lower()
-        score = sum(s_lower.count(k) for k in keywords)
+    scored = []
+    for p in paragraphs:
+        score = sum(p.lower().count(k) for k in keywords)
         if score > 0:
-            scored_sentences.append((score, sentence))
+            scored.append((score, p))
     
-    scored_sentences.sort(reverse=True)
+    scored.sort(reverse=True)
     
-    # Build a clean answer
+    # Build answer
     answer_parts = []
     answer_parts.append('<div style="line-height: 1.6;">')
     
     # Add introduction based on question
-    if "star" in q_lower:
-        answer_parts.append('<p><strong>✨ The Diné Creation Story of the Stars:</strong></p>')
-        answer_parts.append('<p>According to Diné (Navajo) tradition, the stars were placed in the sky by the Holy People during the creation of the Fifth World. Below is an excerpt from traditional teachings:</p>')
-    elif "black god" in q_lower:
+    if "black god" in question_lower:
         answer_parts.append('<p><strong>⭐ Who is Black God (Haashchʼééshzhiní)?</strong></p>')
-        answer_parts.append('<p>Black God is a powerful Holy Person in Diné cosmology who played a crucial role in placing the stars in the sky. According to tradition:</p>')
-    else:
-        answer_parts.append(f'<p><strong>📖 Answer about: {question}</strong></p>')
+        answer_parts.append('<p>According to Diné (Navajo) tradition, Black God is a powerful Holy Person who played a crucial role in the creation of the stars and constellations:</p>')
+        answer_parts.append('<hr>')
+    elif "star" in question_lower:
+        answer_parts.append('<p><strong>✨ How Were the Stars Created?</strong></p>')
+        answer_parts.append('<p>According to Diné creation teachings, the stars were placed in the sky by the Holy People, with Black God playing a central role:</p>')
+        answer_parts.append('<hr>')
+    elif "long walk" in question_lower:
+        answer_parts.append('<p><strong>👣 The Long Walk (Hwéeldi)</strong></p>')
+        answer_parts.append('<p>The Long Walk was the forced relocation of the Diné people by the U.S. Army from 1864-1868:</p>')
+        answer_parts.append('<hr>')
     
-    answer_parts.append('<hr>')
-    
-    # Add the best relevant sentences with context
-    if scored_sentences:
-        # Take top 3-5 relevant sentences
-        for i in range(min(5, len(scored_sentences))):
-            sentence = scored_sentences[i][1].strip()
-            # Clean up the sentence
-            sentence = re.sub(r'\.\.\.+', '...', sentence)
-            answer_parts.append(f'<p>{sentence}</p>')
+    if scored:
+        for i in range(min(3, len(scored))):
+            # Clean up the paragraph
+            para = scored[i][1].strip()
+            para = re.sub(r'\s+', ' ', para)
+            # Split into sentences for better readability
+            sentences = re.split(r'(?<=[.!?])\s+', para)
+            if len(sentences) > 3:
+                para = ' '.join(sentences[:3]) + '...'
+            answer_parts.append(f'<p>{para}</p>')
+            if i < min(2, len(scored)-1):
+                answer_parts.append('<hr style="margin: 10px 0;">')
     else:
-        # Fallback to first few substantial sentences
+        # Take first few substantial paragraphs
         count = 0
-        for sent in sentences:
-            if len(sent) > 60 and count < 4:
-                answer_parts.append(f'<p>{sent.strip()}</p>')
+        for p in paragraphs[:2]:
+            if len(p) > 100:
+                answer_parts.append(f'<p>{p[:500]}...</p>')
                 count += 1
     
     answer_parts.append('<hr>')
@@ -429,8 +458,11 @@ def generate_fallback_answer(question: str, sources: List[Dict[str, Any]]) -> st
         trust_badge = '<span style="background: #2ecc71; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✓ Verified Source</span>'
     elif trust_score >= 0.80:
         trust_badge = '<span style="background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📚 Trusted Source</span>'
+    elif trust_score >= 0.65:
+        trust_badge = '<span style="background: #f39c12; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">ℹ️ Informational</span>'
     
-    answer_parts.append(f'<p><strong>Source:</strong> <a href="{source_url}" target="_blank">{source_url}</a> {trust_badge}</p>')
+    display_url = source_url.replace('local:', '📄 ') if source_url.startswith('local:') else source_url
+    answer_parts.append(f'<p><strong>Source:</strong> {display_url} {trust_badge}</p>')
     
     # Add cultural note
     answer_parts.append('<p style="font-size: 12px; color: #666; margin-top: 15px;"><em>Note: Traditional Diné stories are passed down orally through generations. This excerpt comes from published educational sources. For deeper understanding, consult with Diné cultural knowledge holders.</em></p>')
@@ -439,7 +471,7 @@ def generate_fallback_answer(question: str, sources: List[Dict[str, Any]]) -> st
     
     return '\n'.join(answer_parts)
 
-# HTML Template with loading spinner and example buttons
+# HTML Template with all the new UI features
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -650,6 +682,13 @@ HTML_TEMPLATE = """
         .answer ul, .answer ol { margin-left: 25px; margin-bottom: 12px; }
         .answer li { margin-bottom: 6px; }
         
+        @keyframes highlight {
+            0% { background: #fff3cd; }
+            100% { background: #f9f9f9; }
+        }
+        
+        .answer-highlight { animation: highlight 1.5s ease-out; }
+        
         .fact-box {
             background: #fff3e0;
             padding: 15px;
@@ -672,6 +711,7 @@ HTML_TEMPLATE = """
         @media (max-width: 600px) {
             .content { padding: 20px; }
             .example-btn { font-size: 11px; padding: 6px 12px; }
+            .answer-header { font-size: 16px; }
         }
     </style>
 </head>
@@ -719,8 +759,9 @@ HTML_TEMPLATE = """
                     <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
                     <button class="example-btn" data-question="Tell me about Navajo clans">👨‍👩‍👧‍👦 Tell me about Navajo clans</button>
                     <button class="example-btn" data-question="What does hózhó mean?">☯️ What does hózhó mean?</button>
-                    <button class="example-btn" data-question="Tell me about the Long Walk">👣 Tell me about the Long Walk</button>
-                    <button class="example-btn" data-question="Who were the Navajo Code Talkers?">📡 Who were the Navajo Code Talkers?</button>
+                    <button class="example-btn" data-question="What happened during the Long Walk?">👣 The Long Walk</button>
+                    <button class="example-btn" data-question="Who were the Navajo Code Talkers?">📡 Code Talkers</button>
+                    <button class="example-btn" data-question="Tell me about Navajo weaving">🪶 Navajo weaving</button>
                 </div>
             </div>
             
@@ -744,6 +785,7 @@ HTML_TEMPLATE = """
     </div>
     
     <script>
+        // Example buttons
         document.querySelectorAll('.example-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 document.getElementById('questionInput').value = this.dataset.question;
@@ -754,6 +796,7 @@ HTML_TEMPLATE = """
             });
         });
         
+        // Form submission
         document.getElementById('questionForm').addEventListener('submit', function() {
             if (!document.getElementById('questionInput').value.trim()) {
                 alert('Please enter a question');
@@ -765,10 +808,12 @@ HTML_TEMPLATE = """
             document.getElementById('loadingIndicator').style.display = 'inline-block';
         });
         
+        // Scroll to answer on load
         window.addEventListener('load', function() {
             const submitBtn = document.getElementById('submitBtn');
             const loadingIndicator = document.getElementById('loadingIndicator');
             const answerSection = document.getElementById('answerSection');
+            const answerContent = document.getElementById('answerContent');
             
             if (submitBtn && loadingIndicator) {
                 submitBtn.disabled = false;
@@ -776,14 +821,28 @@ HTML_TEMPLATE = """
                 loadingIndicator.style.display = 'none';
             }
             
-            if (answerSection) {
+            if (answerSection && answerContent) {
                 answerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                answerContent.classList.add('answer-highlight');
+                setTimeout(() => answerContent.classList.remove('answer-highlight'), 1500);
             }
         });
     </script>
 </body>
 </html>
 """
+
+# Seasonal teaching mode
+SEASONAL_MODE = True
+HIBERNATION_MONTHS = {11, 12, 1, 2, 3}
+ANIMAL_KEYWORDS = ["animal", "bear", "coyote", "wolf", "fox", "deer", "elk", "moose", "snake"]
+
+def is_hibernation_season(today=None):
+    today = today or datetime.now().date()
+    return today.month in HIBERNATION_MONTHS
+
+def mentions_animals(text):
+    return any(k in text.lower() for k in ANIMAL_KEYWORDS)
 
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -801,11 +860,8 @@ def home():
         
         if question:
             try:
-                # Seasonal check for animal questions (winter months)
-                current_month = datetime.now().month
-                animal_keywords = ["bear", "coyote", "wolf", "snake", "owl", "eagle"]
-                
-                if current_month in [11, 12, 1, 2, 3] and any(k in question.lower() for k in animal_keywords):
+                # Seasonal check
+                if SEASONAL_MODE and is_hibernation_season() and mentions_animals(question):
                     answer = """
                         <div style="line-height: 1.6;">
                             <p><strong>🍂 Seasonal Teaching Protocol</strong></p>
@@ -814,7 +870,7 @@ def home():
                         </div>
                     """
                 else:
-                    # Gather sources and generate answer
+                    # Gather sources with timeout
                     sources = []
                     sources_result = []
                     
@@ -829,7 +885,7 @@ def home():
                         answer = "Search is taking longer than expected. Please try a more specific question."
                     else:
                         sources = sources_result[0] if sources_result else []
-                        answer = generate_fallback_answer(question, sources)
+                        answer = print_fallback_answer(question, sources)
                         
             except Exception as e:
                 logger.error(f"Error: {e}")
