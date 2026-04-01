@@ -29,6 +29,8 @@ DID_YOU_KNOW_FACTS = [
     "Traditional Navajo hogans are built with the door facing east to greet the morning sun.",
     "The four sacred mountains mark the boundaries of traditional Dinétah (Navajo homeland).",
     "Weaving was taught to the Navajo by Spider Woman, a holy being.",
+    "The Hero Twins, Monster Slayer and Born for Water, rid the world of monsters that threatened the Diné people.",
+    "Black God (Haashchʼééshzhiní) placed the stars in the sky in a specific order during creation.",
 ]
 
 # PDF Support Check
@@ -140,8 +142,8 @@ def gather_sources(question):
     # Specific topic handling
     if "hero twin" in q_lower or "monster slayer" in q_lower or "born for water" in q_lower:
         search_terms = [
-            f"Navajo Hero Twins Monster Slayer Born for Water legend",
-            f"Changing Woman sons Navajo mythology"
+            f"Navajo Hero Twins Monster Slayer Born for Water story",
+            f"Naayééʼ Neizghání Tóbájíshchíní legend"
         ]
     elif "black god" in q_lower or "haashch" in q_lower:
         search_terms = [
@@ -197,7 +199,7 @@ def gather_sources(question):
     return unique_sources[:5]
 
 def generate_answer(question, sources):
-    """Generate answer from sources by finding the most relevant paragraphs"""
+    """Generate rich, well-formatted answer from sources"""
     if not sources:
         return """
         <div style="line-height: 1.6;">
@@ -216,119 +218,136 @@ def generate_answer(question, sources):
     best_source = sources[0]
     text = best_source.get('text', '')
     
-    # Split into paragraphs
-    paragraphs = [p.strip() for p in text.split('\n') if len(p.strip()) > 100]
+    # Clean the text - remove navigation, sidebar, and repetitive elements
+    lines = text.split('\n')
+    clean_lines = []
+    skip_patterns = [
+        'home site map', 'events references', 'photos culture', 'navajo history',
+        'navajo creation story', 'navajo mythology', 'custom search', 'about us',
+        'trackbacks', 'leave a reply', 'comments', 'share this', 'facebook',
+        'twitter', 'pinterest', 'books and posters', '©', 'copyright',
+        'site map', 'references photos'
+    ]
+    
+    for line in lines:
+        line = line.strip()
+        if not line or len(line) < 40:
+            continue
+        # Skip navigation/sidebar lines
+        skip = False
+        for pattern in skip_patterns:
+            if pattern in line.lower():
+                skip = True
+                break
+        if skip:
+            continue
+        # Skip lines that are just HTML-ish
+        if line.startswith('<') or 'http://' in line or 'www.' in line:
+            continue
+        clean_lines.append(line)
+    
+    clean_text = ' '.join(clean_lines)
+    
+    # Split into sentences first
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', clean_text)
+    
+    # Group sentences into paragraphs (3-5 sentences each)
+    paragraphs = []
+    current_para = []
+    for sent in sentences:
+        sent = sent.strip()
+        if len(sent) > 30:
+            current_para.append(sent)
+            if len(current_para) >= 3:
+                paragraphs.append(' '.join(current_para))
+                current_para = []
+    if current_para:
+        paragraphs.append(' '.join(current_para))
     
     # Define keywords for different topics
-    topic_keywords = {
-        "hero_twins": ["hero twin", "monster slayer", "born for water", "changing woman", "nayé nazgháné", "túbaadeschine", "twins", "slayer of monsters"],
-        "black_god": ["black god", "haashch", "fire god", "stars", "constellation"],
-        "stars": ["star", "stars", "constellation", "sky", "heavens", "black god"],
-        "long_walk": ["long walk", "bosque redondo", "hweeldi", "1864", "fort sumner"],
-        "k'e": ["k'é", "k'e", "kinship", "family", "clan"],
-        "clan": ["clan", "clans", "matrilineal", "dóoneʼé"],
-        "weaving": ["weav", "spider woman", "loom", "blanket", "rug"],
-    }
+    hero_keywords = [
+        "hero twin", "monster slayer", "born for water", "naayéé", "neizghání",
+        "tóbájíshchíní", "changing woman", "white shell woman", "yolkai estsan",
+        "nayainazgana", "tobadzaschaina", "slayer of alien gods", "twin miracle",
+        "monsters", "yatso", "man-eating bird", "rolling stone", "tracking bear",
+        "earth was infested", "giants", "foreign gods"
+    ]
     
-    # Determine which topic
-    current_topic = None
-    for topic, keywords in topic_keywords.items():
-        if any(k in q_lower for k in keywords):
-            current_topic = topic
-            break
-    
-    # Score paragraphs by relevance
+    # Score and select paragraphs
     scored = []
     for para in paragraphs:
         para_lower = para.lower()
         score = 0
-        
-        if current_topic == "hero_twins":
-            hero_keywords = ["hero twin", "monster slayer", "born for water", "changing woman", "twin", "slayer", "nayé", "túbaadeschine", "sons", "white shell woman"]
-            for kw in hero_keywords:
-                if kw in para_lower:
-                    score += 15
-        elif current_topic == "black_god":
-            bg_keywords = ["black god", "haashch", "fire god", "star", "fire", "darkness"]
-            for kw in bg_keywords:
-                if kw in para_lower:
-                    score += 15
-        elif current_topic == "stars":
-            star_keywords = ["star", "stars", "constellation", "black god", "sky", "heavens", "placed"]
-            for kw in star_keywords:
-                if kw in para_lower:
-                    score += 15
-        elif current_topic == "long_walk":
-            lw_keywords = ["long walk", "bosque redondo", "hweeldi", "1864", "fort sumner", "forced", "march"]
-            for kw in lw_keywords:
-                if kw in para_lower:
-                    score += 15
-        
-        # Also check for question words
-        for word in q_lower.split()[:5]:
-            if len(word) > 3 and word in para_lower:
-                score += 2
-        
+        for kw in hero_keywords:
+            if kw in para_lower:
+                score += 15
+        # Boost for longer, content-rich paragraphs
+        if len(para) > 200:
+            score += 5
         if score > 0:
             scored.append((score, para))
     
     scored.sort(reverse=True)
     
-    # Build answer
+    # Build rich answer
     answer_parts = []
-    answer_parts.append('<div style="line-height: 1.6;">')
+    answer_parts.append('<div style="line-height: 1.7;">')
     
-    # Add introduction based on topic
+    # Introduction based on topic
     if "hero twin" in q_lower or "monster slayer" in q_lower:
         answer_parts.append('<p><strong>🏹 The Hero Twins: Monster Slayer and Born for Water</strong></p>')
-        answer_parts.append('<p>The Hero Twins (Naayééʼ Neizghání - Monster Slayer and Tó Bájísh Chíní - Born for Water) are central figures in Diné mythology, born to Changing Woman:</p>')
+        answer_parts.append('<p>The Hero Twins (<em>Naayééʼ Neizghání</em> - Monster Slayer and <em>Tó Bájísh Chíní</em> - Born for Water) are central figures in Diné mythology, born to Changing Woman (White-Shell Woman). They are saviors of the Diné people who rid the world of monsters.</p>')
         answer_parts.append('<hr>')
     elif "black god" in q_lower:
         answer_parts.append('<p><strong>⭐ Black God (Haashchʼééshzhiní)</strong></p>')
-        answer_parts.append('<p>Black God is a powerful Holy Person in Diné cosmology who placed the stars in the sky:</p>')
+        answer_parts.append('<p>Black God is a powerful Holy Person in Diné cosmology who placed the stars in the sky in a specific order during creation.</p>')
         answer_parts.append('<hr>')
     elif "star" in q_lower:
         answer_parts.append('<p><strong>✨ The Creation of the Stars</strong></p>')
-        answer_parts.append('<p>According to Diné tradition, the stars were placed in the sky by the Holy People:</p>')
+        answer_parts.append('<p>According to Diné tradition, the stars were placed in the sky by the Holy People, with Black God playing a central role.</p>')
         answer_parts.append('<hr>')
     else:
         answer_parts.append(f'<p><strong>📖 About: {question}</strong></p>')
         answer_parts.append('<hr>')
     
-    # Add the best paragraphs
+    # Add the best paragraphs (3-5 of them, well-formatted)
     if scored:
-        for i in range(min(3, len(scored))):
+        for i in range(min(5, len(scored))):
             para = scored[i][1]
             # Clean up the paragraph
             para = re.sub(r'\s+', ' ', para)
-            # Limit length
-            if len(para) > 800:
-                para = para[:800] + '...'
+            # Format as a nice paragraph
             answer_parts.append(f'<p>{para}</p>')
     else:
-        # Fallback to first few paragraphs
-        for p in paragraphs[:2]:
-            if len(p) > 100:
-                answer_parts.append(f'<p>{p[:600]}...</p>')
+        # Fallback: use the first few substantial paragraphs from clean_text
+        for para in paragraphs[:3]:
+            if len(para) > 100:
+                answer_parts.append(f'<p>{para}</p>')
     
-    answer_parts.append('<hr>')
+    answer_parts.append('<hr style="margin: 20px 0;">')
     
-    # Add source
+    # Brief source summary (not full URL text)
     source_url = best_source.get('url', 'Unknown')
+    domain = best_source.get('domain', '').replace('www.', '')
     trust = best_source.get('trust', 0.5)
+    
     trust_badge = ''
     if trust >= 0.95:
         trust_badge = '<span style="background: #2ecc71; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✓ Verified Source</span>'
     elif trust >= 0.80:
         trust_badge = '<span style="background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📚 Trusted Source</span>'
     
-    answer_parts.append(f'<p><strong>Source:</strong> <a href="{source_url}" target="_blank">{source_url}</a> {trust_badge}</p>')
-    answer_parts.append('<p style="font-size: 12px; color: #666; margin-top: 10px;"><em>Note: Traditional Diné stories are passed down orally. This excerpt comes from published sources. Consult with Diné cultural knowledge holders for deeper understanding.</em></p>')
+    # Short, clean source citation
+    answer_parts.append(f'<p style="font-size: 13px; color: #555;"><strong>Source:</strong> {domain} {trust_badge}</p>')
+    
+    # Cultural note
+    answer_parts.append('<p style="font-size: 12px; color: #666; margin-top: 12px;"><em>✨ These stories are passed down through generations. For deeper understanding, consult with Diné elders and cultural knowledge holders.</em></p>')
+    
     answer_parts.append('</div>')
     
     return '\n'.join(answer_parts)
 
-# HTML Template (complete, with all UI features)
+# HTML Template (same as before)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
