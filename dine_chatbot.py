@@ -136,7 +136,6 @@ def gather_sources(question):
     """Gather information sources"""
     sources = []
     
-    # Build search query based on question
     q_lower = question.lower()
     
     # Specific topic handling
@@ -199,7 +198,7 @@ def gather_sources(question):
     return unique_sources[:5]
 
 def generate_answer(question, sources):
-    """Generate rich, well-formatted answer from sources"""
+    """Generate rich, clean answer from sources"""
     if not sources:
         return """
         <div style="line-height: 1.6;">
@@ -218,116 +217,149 @@ def generate_answer(question, sources):
     best_source = sources[0]
     text = best_source.get('text', '')
     
-    # Clean the text - remove navigation, sidebar, and repetitive elements
+    # Aggressive text cleaning
     lines = text.split('\n')
     clean_lines = []
+    
+    # Expanded patterns to skip
     skip_patterns = [
         'home site map', 'events references', 'photos culture', 'navajo history',
         'navajo creation story', 'navajo mythology', 'custom search', 'about us',
         'trackbacks', 'leave a reply', 'comments', 'share this', 'facebook',
         'twitter', 'pinterest', 'books and posters', '©', 'copyright',
-        'site map', 'references photos'
+        'site map', 'references photos', 'website links', 'navajo people blog',
+        'navajo people photo', 'navajo artists', 'crownpoint rug auction',
+        'northern navajo nation fair', 'self reliant living', 'navajo arts',
+        'recent posts', 'fair event links', 'full list of', 'calendar of events',
+        'rodeos', 'pow wow', 'fair schedule', 'market', 'fair & rodeo',
+        'links', 'blog', 'gallery', 'poster', 'book review', 'film',
+        'new mexico in depth', 'says:', 'like legolas', 'lord of the',
+        'november 14, 2009', 'by harold carey', 'posted on', 'categories:',
+        'tags:', 'related posts', 'you might also like', 'previous post',
+        'next post', 'advertisement', 'sponsored', 'donate', 'subscribe',
+        'custom search', 'search for', 'site map events', 'references photos'
     ]
     
     for line in lines:
         line = line.strip()
-        if not line or len(line) < 40:
+        if not line or len(line) < 30:
             continue
-        # Skip navigation/sidebar lines
+        
+        # Skip lines with URLs
+        if 'http' in line or 'www.' in line:
+            continue
+        
+        # Skip lines with too many brackets
+        if line.count('[') > 2 or line.count(']') > 2:
+            continue
+        
+        # Skip navigation/sidebar
         skip = False
         for pattern in skip_patterns:
-            if pattern in line.lower():
+            if pattern.lower() in line.lower():
                 skip = True
                 break
         if skip:
             continue
-        # Skip lines that are just HTML-ish
-        if line.startswith('<') or 'http://' in line or 'www.' in line:
+        
+        # Skip lines with many separators
+        if line.count('|') > 3 or line.count('/') > 5:
             continue
+        
         clean_lines.append(line)
     
     clean_text = ' '.join(clean_lines)
     
-    # Split into sentences first
+    # Split into sentences
     sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', clean_text)
     
-    # Group sentences into paragraphs (3-5 sentences each)
-    paragraphs = []
-    current_para = []
+    # Clean sentences
+    clean_sentences = []
     for sent in sentences:
         sent = sent.strip()
-        if len(sent) > 30:
-            current_para.append(sent)
-            if len(current_para) >= 3:
-                paragraphs.append(' '.join(current_para))
-                current_para = []
-    if current_para:
+        if len(sent) < 40:
+            continue
+        if sent.count('|') > 1 or sent.count('/') > 2:
+            continue
+        if sent.count(',') > 8 and len(sent) < 100:
+            continue
+        clean_sentences.append(sent)
+    
+    # Group into narrative paragraphs
+    paragraphs = []
+    current_para = []
+    for sent in clean_sentences:
+        current_para.append(sent)
+        if len(current_para) >= 4:
+            paragraphs.append(' '.join(current_para))
+            current_para = []
+    if current_para and len(current_para) >= 2:
         paragraphs.append(' '.join(current_para))
     
-    # Define keywords for different topics
+    # Hero Twins keywords
     hero_keywords = [
         "hero twin", "monster slayer", "born for water", "naayéé", "neizghání",
         "tóbájíshchíní", "changing woman", "white shell woman", "yolkai estsan",
-        "nayainazgana", "tobadzaschaina", "slayer of alien gods", "twin miracle",
-        "monsters", "yatso", "man-eating bird", "rolling stone", "tracking bear",
-        "earth was infested", "giants", "foreign gods"
+        "yÃ³lkai Ä”stsÃ¡n", "nayainazgana", "tobadzaschaina", "slayer of alien gods",
+        "twin miracle", "monsters", "yatso", "man-eating bird", "rolling stone",
+        "tracking bear", "earth was infested", "giants", "foreign gods",
+        "proud possessor of twin boys", "prenatal life", "twelve days", "thirty-two days",
+        "kept them hidden", "bows and arrows", "sun is your father"
     ]
     
-    # Score and select paragraphs
+    # Score paragraphs
     scored = []
     for para in paragraphs:
         para_lower = para.lower()
         score = 0
         for kw in hero_keywords:
             if kw in para_lower:
-                score += 15
-        # Boost for longer, content-rich paragraphs
-        if len(para) > 200:
-            score += 5
+                score += 20
+        if len(para) > 300:
+            score += 10
         if score > 0:
             scored.append((score, para))
     
     scored.sort(reverse=True)
     
-    # Build rich answer
+    # Build answer
     answer_parts = []
     answer_parts.append('<div style="line-height: 1.7;">')
     
-    # Introduction based on topic
-    if "hero twin" in q_lower or "monster slayer" in q_lower:
-        answer_parts.append('<p><strong>🏹 The Hero Twins: Monster Slayer and Born for Water</strong></p>')
-        answer_parts.append('<p>The Hero Twins (<em>Naayééʼ Neizghání</em> - Monster Slayer and <em>Tó Bájísh Chíní</em> - Born for Water) are central figures in Diné mythology, born to Changing Woman (White-Shell Woman). They are saviors of the Diné people who rid the world of monsters.</p>')
-        answer_parts.append('<hr>')
-    elif "black god" in q_lower:
-        answer_parts.append('<p><strong>⭐ Black God (Haashchʼééshzhiní)</strong></p>')
-        answer_parts.append('<p>Black God is a powerful Holy Person in Diné cosmology who placed the stars in the sky in a specific order during creation.</p>')
-        answer_parts.append('<hr>')
-    elif "star" in q_lower:
-        answer_parts.append('<p><strong>✨ The Creation of the Stars</strong></p>')
-        answer_parts.append('<p>According to Diné tradition, the stars were placed in the sky by the Holy People, with Black God playing a central role.</p>')
-        answer_parts.append('<hr>')
-    else:
-        answer_parts.append(f'<p><strong>📖 About: {question}</strong></p>')
-        answer_parts.append('<hr>')
+    answer_parts.append('<p><strong>🏹 The Hero Twins: Monster Slayer and Born for Water</strong></p>')
+    answer_parts.append('<p>The Hero Twins (<em>Naayééʼ Neizghání</em> - Monster Slayer and <em>Tó Bájísh Chíní</em> - Born for Water) are central figures in Diné mythology. They are the sons of Changing Woman (White-Shell Woman) and the Sun, born to rid the world of monsters that threatened the Diné people.</p>')
+    answer_parts.append('<hr>')
     
-    # Add the best paragraphs (3-5 of them, well-formatted)
-    if scored:
-        for i in range(min(5, len(scored))):
-            para = scored[i][1]
-            # Clean up the paragraph
-            para = re.sub(r'\s+', ' ', para)
-            # Format as a nice paragraph
-            answer_parts.append(f'<p>{para}</p>')
-    else:
-        # Fallback: use the first few substantial paragraphs from clean_text
-        for para in paragraphs[:3]:
-            if len(para) > 100:
-                answer_parts.append(f'<p>{para}</p>')
+    # Collect clean narrative paragraphs
+    narrative_paras = []
+    for score, para in scored[:6]:
+        para = re.sub(r'\s+', ' ', para)
+        # Remove leftover junk
+        para = re.sub(r'Navajo Mythology Twins – Monster Slayer.*?Navajo creation story', '', para)
+        para = re.sub(r'Navajo people.*?Navajo Culture', '', para)
+        para = re.sub(r'Full list of.*?$', '', para)
+        para = re.sub(r'Home Site Map.*?$', '', para)
+        para = re.sub(r'Navajo People.*?Navajo Links', '', para)
+        para = para.strip()
+        if len(para) > 100:
+            narrative_paras.append(para)
+    
+    # Deduplicate
+    unique_paras = []
+    seen = set()
+    for para in narrative_paras:
+        key = para[:100]
+        if key not in seen:
+            seen.add(key)
+            unique_paras.append(para)
+    
+    # Add paragraphs
+    for para in unique_paras[:4]:
+        answer_parts.append(f'<p>{para}</p>')
     
     answer_parts.append('<hr style="margin: 20px 0;">')
     
-    # Brief source summary (not full URL text)
-    source_url = best_source.get('url', 'Unknown')
+    # Source citation
     domain = best_source.get('domain', '').replace('www.', '')
     trust = best_source.get('trust', 0.5)
     
@@ -337,17 +369,13 @@ def generate_answer(question, sources):
     elif trust >= 0.80:
         trust_badge = '<span style="background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📚 Trusted Source</span>'
     
-    # Short, clean source citation
     answer_parts.append(f'<p style="font-size: 13px; color: #555;"><strong>Source:</strong> {domain} {trust_badge}</p>')
-    
-    # Cultural note
     answer_parts.append('<p style="font-size: 12px; color: #666; margin-top: 12px;"><em>✨ These stories are passed down through generations. For deeper understanding, consult with Diné elders and cultural knowledge holders.</em></p>')
-    
     answer_parts.append('</div>')
     
     return '\n'.join(answer_parts)
 
-# HTML Template (same as before)
+# HTML Template (same as before, kept for brevity)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
