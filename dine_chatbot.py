@@ -7,205 +7,228 @@ import urllib.request
 from html.parser import HTMLParser
 from datetime import datetime, date
 from typing import List, Dict, Any, Optional, Tuple, Set
-import io  # Make sure this line is present
+import io
+import threading
+import logging
+import os
+import random
 
 from flask import Flask, request, render_template_string
+
+# Setup logging for Render
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create Flask app
 app = Flask(__name__)
 
-# Optional: OpenAI (only used if you have billing/credits enabled)
-import os
-import openai
+# Fun facts for loading screen
+FUN_FACTS = [
+    "💡 Did you know? The Navajo language has no curse words - Diné teachings emphasize respectful speech.",
+    "💡 The word 'Navajo' comes from Tewa, meaning 'large planted fields.' The Diné call themselves Diné - 'The People.'",
+    "💡 Traditional Navajo teachings emphasize listening over speaking - we learn by observing first.",
+    "💡 The four sacred colors in Diné tradition are white (east), blue (south), yellow (west), and black (north).",
+    "💡 Navajo weavings traditionally include a 'spirit line' - a small thread from the center to the edge to let the weaver's spirit escape.",
+    "💡 The Navajo Nation spans over 27,000 square miles across Arizona, Utah, and New Mexico.",
+    "💡 K'é (kinship) extends beyond blood relations to include all of creation - even the mountains and stars are relatives.",
+    "💡 Hózhó is often translated as 'beauty' but encompasses harmony, balance, and wellness in all aspects of life.",
+    "💡 Traditional Navajo hogans are built with the door facing east to greet the morning sun and receive blessings.",
+    "💡 The Navajo Code Talkers developed an unbreakable code based on the Navajo language during WWII.",
+]
 
+# Did You Know facts for sidebar
+DID_YOU_KNOW_FACTS = [
+    "The Navajo language was used as a code during WWII by the famous Code Talkers - it was never broken!",
+    "K'é (kinship) extends beyond blood relations to include all of creation - even the mountains are considered relatives.",
+    "Hózhó is often translated as 'beauty' but encompasses harmony, balance, and wellness in all aspects of life.",
+    "Traditional Navajo hogans are built with the door facing east to greet the morning sun and receive blessings.",
+    "The four sacred mountains mark the boundaries of traditional Dinétah (Navajo homeland).",
+    "Weaving was taught to the Navajo by Spider Woman, a holy being who showed them how to create beauty.",
+    "The Navajo Nation is the largest Native American reservation in the United States, spanning over 27,000 square miles.",
+    "In Diné tradition, the number four is sacred - representing the four directions, four seasons, and four sacred mountains.",
+    "The Navajo creation story tells of the Diné emerging through four worlds before arriving in this one.",
+    "Traditional Navajo names are often given in ceremonies and hold deep spiritual significance.",
+]
+
+# Pronunciation guide for Diné words
+PRONUNCIATION_GUIDE = {
+    "k'é": "k'-eh (glottal stop, like 'uh-oh')",
+    "k'e": "k'-eh (glottal stop, like 'uh-oh')",
+    "hózhó": "hoh-zhoh (with nasalized 'oh')",
+    "hozho": "hoh-zhoh (with nasalized 'oh')",
+    "diné": "di-nay (meaning 'the people')",
+    "dine": "di-nay (meaning 'the people')",
+    "nahasdzáán": "nah-has-dzahn (Mother Earth)",
+    "yádiłhił": "yah-dilth (Father Sky)",
+    "naalyéhé": "nah-lyay-hay (traditional Navajo medicine)",
+    "hataałii": "hah-tah-ah-lee (traditional healer)",
+}
+
+def add_pronunciation_tooltips(text):
+    """Add pronunciation tooltips to Diné words"""
+    if not text:
+        return text
+    
+    for word, pron in PRONUNCIATION_GUIDE.items():
+        # Match whole words only (case insensitive)
+        pattern = r'\b' + re.escape(word) + r'\b'
+        replacement = f'<span title="Pronunciation: {pron}" style="border-bottom: 1px dotted #2c5f2d; cursor: help;">{word}</span>'
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    return text
+
+def get_trust_badge(trust_score: float) -> str:
+    """Generate trust badge HTML based on source trust score"""
+    if trust_score >= 0.95:
+        return '<span style="background: #2ecc71; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">✓ Verified Source</span>'
+    elif trust_score >= 0.80:
+        return '<span style="background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">📚 Trusted Source</span>'
+    elif trust_score >= 0.65:
+        return '<span style="background: #f39c12; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">ℹ️ Informational</span>'
+    else:
+        return '<span style="background: #95a5a6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">📖 Reference</span>'
+
+def get_related_questions(question: str) -> List[str]:
+    """Suggest related questions based on the current question"""
+    q_lower = question.lower()
+    
+    topic_map = {
+        "k'é": [
+            "What are the four clans of the Navajo?",
+            "How do you introduce yourself in Navajo?",
+            "What is kinship responsibility in Diné culture?",
+            "How do Navajo clan relationships work?"
+        ],
+        "k'e": [
+            "What are the four clans of the Navajo?",
+            "How do you introduce yourself in Navajo?",
+            "What is kinship responsibility in Diné culture?"
+        ],
+        "clan": [
+            "What is k'é and how does it relate to clans?",
+            "How do Navajo clans trace lineage?",
+            "What are the original four clans?"
+        ],
+        "weav": [
+            "What do Navajo rug patterns mean?",
+            "Who was Spider Woman?",
+            "How is wool prepared for weaving?",
+            "What is the significance of the spirit line?"
+        ],
+        "hózhó": [
+            "How do Diné people practice hózhó in daily life?",
+            "What is the Hózhóójí ceremony?",
+            "How does hózhó relate to health and wellness?"
+        ],
+        "hozho": [
+            "How do Diné people practice hózhó in daily life?",
+            "What is the Hózhóójí ceremony?"
+        ],
+        "code talker": [
+            "How did the Code Talkers develop their code?",
+            "Who were the original Navajo Code Talkers?",
+            "Why was the Navajo language perfect for code?"
+        ],
+        "long walk": [
+            "What led to the Long Walk?",
+            "What was life like at Bosque Redondo?",
+            "How did the Navajo people survive the Long Walk?"
+        ],
+        "spider woman": [
+            "How did Spider Woman teach weaving?",
+            "What is the story of Spider Woman?",
+            "What is the significance of Spider Woman in Diné culture?"
+        ]
+    }
+    
+    for topic, suggestions in topic_map.items():
+        if topic in q_lower:
+            return suggestions
+    
+    # Default suggestions
+    return [
+        "What is the meaning of k'é?",
+        "Tell me about Navajo weaving traditions",
+        "What does hózhó mean?",
+        "Who were the Navajo Code Talkers?",
+        "What are the four sacred mountains?"
+    ]
+
+# Optional: OpenAI
 try:
-    def load_openai_key():
-        # First check environment variable (for Render)
+    import openai
+    OPENAI_INSTALLED = True
+except ImportError:
+    OPENAI_INSTALLED = False
+    logger.info("OpenAI not installed - using local knowledge base only")
+
+OPENAI_AVAILABLE = False
+if OPENAI_INSTALLED:
+    try:
         env_key = os.environ.get("OPENAI_API_KEY")
         if env_key:
-            print("✅ Using OpenAI key from environment variable")
-            return env_key
-        
-        # Fallback to file (for local development)
-        try:
-            with open(os.path.expanduser("~/openai_key.txt"), "r") as f:
-                print("✅ Using OpenAI key from file")
-                return f.read().strip()
-        except:
-            print("⚠️ No OpenAI key found")
-            return None
-
-    OPENAI_API_KEY = load_openai_key()
-    if OPENAI_API_KEY:
-        openai.api_key = OPENAI_API_KEY
-        OPENAI_AVAILABLE = True
-        print("✅ OpenAI initialized with API key")
-    else:
-        OPENAI_AVAILABLE = False
-        print("ℹ️ OpenAI key not found - using local knowledge base only")
-except ImportError:
-    OPENAI_AVAILABLE = False
-    print("ℹ️ OpenAI not installed - using local knowledge base only")
-
+            openai.api_key = env_key
+            OPENAI_AVAILABLE = True
+            logger.info("OpenAI initialized with API key from environment")
+        else:
+            try:
+                with open(os.path.expanduser("~/openai_key.txt"), "r") as f:
+                    openai.api_key = f.read().strip()
+                    OPENAI_AVAILABLE = True
+                    logger.info("OpenAI initialized with API key from file")
+            except:
+                logger.warning("No OpenAI key found - using local knowledge base only")
+    except Exception as e:
+        logger.warning(f"Error initializing OpenAI: {e}")
 
 # PDF Support Check
 try:
     import PyPDF2
     PDF_SUPPORT = True
-    print("✅ PyPDF2 found - PDF support enabled")
+    logger.info("PyPDF2 found - PDF support enabled")
 except ImportError:
     PyPDF2 = None
     PDF_SUPPORT = False
-    print("❌ PyPDF2 NOT found - PDFs will show garbage")
+    logger.warning("PyPDF2 NOT found - PDFs will show garbage")
 
-# PDF Support - Using system packages
-try:
-    import PyPDF2
-    PDF_SUPPORT = True
-    print("✅ PDF support enabled (PyPDF2 from system packages)")
-except ImportError:
-    PyPDF2 = None
-    PDF_SUPPORT = False
-    print("⚠️  PyPDF2 not available. PDF text extraction will be limited.")
-
-# pdfplumber might not be available via apt, so check gracefully
 try:
     import pdfplumber
     PDFPLUMBER_SUPPORT = True
-    print("✅ Advanced PDF support enabled (pdfplumber)")
 except ImportError:
     pdfplumber = None
     PDFPLUMBER_SUPPORT = False
-    print("ℹ️  pdfplumber not installed (optional). Using PyPDF2 only.")
-
-
-
-
-
-def simple_summary(sources: List[Dict[str, Any]], max_sentences: int = 3) -> str:
-    """
-    Crude, rule‑of‑thumb summary of the fetched texts.
-    Used only when OpenAI isn't available.
-    """
-    sentences: List[str] = []
-    for s in sorted(sources, key=lambda x: x.get("trust", 0), reverse=True):
-        text = (s.get("text") or "").strip()
-        if not text:
-            continue
-        # split on ., ? or ! followed by whitespace
-        parts = re.split(r'(?<=[\.\?\!])\s+', text)
-        for p in parts:
-            candidate = p.strip()
-            if candidate and candidate not in sentences:
-                sentences.append(candidate)
-                break                 # only the first sentence per source
-        if len(sentences) >= max_sentences:
-            break
-    return " ".join(sentences)
-
-def load_api_key_from_file(path="openai_key.txt"):
-    """Load OpenAI API key from environment or file."""
-    # First try environment variable (for Render)
-    env_key = os.environ.get("OPENAI_API_KEY")
-    if env_key:
-        print("✅ Using OpenAI key from environment variable")
-        return env_key
-    
-    # Fallback to file (for local development)
-    try:
-        with open(path, "r") as f:
-            print("✅ Using OpenAI key from file")
-            return f.read().strip()
-    except FileNotFoundError:
-        print(f"Warning: API key file {path} not found")
-        return ""
-    except Exception as e:
-        print(f"Warning: Could not read API key: {e}")
-        return ""
 
 # ----------------------------
-# 1) Configure your allowlist - UPDATED WITH NEW DOMAINS
+# 1) Configure your allowlist
 # ----------------------------
 ALLOWED_DOMAINS = [
-    # --- Official Navajo Nation / Diné Government ---
-    "navajo-nsn.gov",
-    "courts.navajo-nsn.gov",
-    "navajocourts.org",
-    "navajochapters.org",
-    "nnwo.org",
-    "navajopeople.org",
-    "navajo.org",
-
-    # --- Diné Education & Language ---
-    "dinecollege.edu",
-    "navajolanguageacademy.org",
-    "roughrock.k12.az.us",
-    "nau.edu",
-    "navajotech.edu",
-    "unm.edu",
-
-    # --- Diné Media & Community Organizations ---
-    "navajotimes.com",
-    "navajocodetalkers.org",
-    "discovernavajo.com",
-    "navajohopiobserver.com",
-    "dineta.com",
-
-    # --- Indigenous Journalism ---
-    "ictnews.org",
-    "indiancountrytoday.com",
-    "nativeamericannews.net",
-    "ncai.org",
-
-    # --- Museums & Academic Institutions ---
-    "americanindian.si.edu",
-    "loc.gov",
-    "pbs.org",
-    "smithsonianmag.com",
-
-    # --- University Presses (Academic Books) ---
-    "unmpress.com",
-    "upcolorado.com",
-    "uapress.arizona.edu",
-    
-    # --- Academic & Cultural Resources ---
-    "jstor.org",
-    "anthrosource.onlinelibrary.wiley.com",
-    "ehillerman.unm.edu",
-    
-    # --- Additional Cultural Sites ---
-    "navajoculture.org",
-    "traditionalnavajoteachings.org",
+    "navajo-nsn.gov", "courts.navajo-nsn.gov", "navajocourts.org",
+    "navajochapters.org", "nnwo.org", "navajopeople.org", "navajo.org",
+    "dinecollege.edu", "navajolanguageacademy.org", "roughrock.k12.az.us",
+    "nau.edu", "navajotech.edu", "unm.edu", "navajotimes.com",
+    "navajocodetalkers.org", "discovernavajo.com", "navajohopiobserver.com",
+    "dineta.com", "ictnews.org", "indiancountrytoday.com", "nativeamericannews.net",
+    "ncai.org", "americanindian.si.edu", "loc.gov", "pbs.org", "smithsonianmag.com",
+    "unmpress.com", "upcolorado.com", "uapress.arizona.edu", "jstor.org",
+    "anthrosource.onlinelibrary.wiley.com", "ehillerman.unm.edu",
+    "navajoculture.org", "traditionalnavajoteachings.org",
 ]
-import os
-import glob
 
-# Document search configuration
+import glob
 DOCUMENTS_FOLDER = "/home/tony-cullen/dine_documents"
 
 def load_documents_from_folder():
-    """Load all text files from the documents folder."""
     documents = []
-    
-    # Create folder if it doesn't exist
     if not os.path.exists(DOCUMENTS_FOLDER):
         os.makedirs(DOCUMENTS_FOLDER)
-        print(f"📁 Created folder: {DOCUMENTS_FOLDER}")
-        print("   Add .txt files there to include them in searches")
         return documents
     
-    # Find all .txt files
     txt_files = glob.glob(os.path.join(DOCUMENTS_FOLDER, "*.txt"))
-    
     for file_path in txt_files:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            
             filename = os.path.basename(file_path)
-            # Check if this is a story file
             is_story = 'story' in filename.lower() or 'hero' in filename.lower()
-            
             documents.append({
                 "url": f"local:{filename}",
                 "domain": "local-documents",
@@ -214,118 +237,66 @@ def load_documents_from_folder():
                 "label": filename,
                 "text": content
             })
-            print(f"Loaded document: {filename}")
         except Exception as e:
-            print(f"Error loading {file_path}: {e}")
-    
+            logger.error(f"Error loading {file_path}: {e}")
     return documents
 
 def search_documents(question, documents):
-    """Search through local documents for relevant content."""
     if not documents:
         return []
     
     question_lower = question.lower()
-    keywords = question_lower.split()
-    
-    # Remove common words
-    stop_words = {'the', 'a', 'an', 'is', 'at', 'which', 'on', 'and', 'or', 'to', 'in', 'for', 'who', 'what', 'where', 'when', 'why', 'how'}
-    keywords = [k for k in keywords if k not in stop_words and len(k) > 3]
+    keywords = [k for k in question_lower.split() if len(k) > 3 and k not in {'the','a','an','is','at','which','on','and','or','to','in','for'}]
     
     results = []
     for doc in documents:
         text_lower = doc['text'].lower()
-        score = 0
-        
-        # Count keyword matches
-        for keyword in keywords:
-            score += text_lower.count(keyword)
-        
-        # Check for exact phrases
-        if "black god" in question_lower and ("black god" in text_lower or "haashchʼééshzhiní" in text_lower):
-            score += 50  # Big boost for exact match
-        
-        if score > 10:  # Minimum relevance threshold
+        score = sum(text_lower.count(k) for k in keywords)
+        if "black god" in question_lower and ("black god" in text_lower or "haashch" in text_lower):
+            score += 50
+        if score > 10:
             doc_copy = doc.copy()
             doc_copy['relevance'] = score
             results.append(doc_copy)
     
-    # Sort by relevance
     results.sort(key=lambda x: x.get('relevance', 0), reverse=True)
-    return results[:5]  # Return top 5
+    return results[:5]
 
-
-TRUSTED_MEDIA = [
-    # Add trusted media entries as needed
-    # {"title": "Example Video", "source": "YouTube", "url": "https://youtube.com/watch?v=..."}
-]
+TRUSTED_MEDIA = []
 ALLOWED_EXACT_URLS = {m["url"] for m in TRUSTED_MEDIA}
 
-# --- Seasonal teaching mode ---
-SEASONAL_MODE = True  # turn off by setting False
-HIBERNATION_MONTHS = {11, 12, 1, 2, 3}  # conservative "winter" window
-
-# If asked about animals during winter, we avoid it (per your rule).
-ANIMAL_KEYWORDS = [
-    "animal", "bear", "coyote", "wolf", "fox", "deer", "elk", "moose", "snake",
-    "lizard", "frog", "turtle", "owl", "eagle", "hawk", "bird", "dog", "cat",
-    "horse", "buffalo", "bison", "rabbit", "hare", "squirrel", "bat"
-]
+# Seasonal teaching mode
+SEASONAL_MODE = True
+HIBERNATION_MONTHS = {11, 12, 1, 2, 3}
+ANIMAL_KEYWORDS = ["animal", "bear", "coyote", "wolf", "fox", "deer", "elk", "moose", "snake",
+                   "lizard", "frog", "turtle", "owl", "eagle", "hawk", "bird", "dog", "cat",
+                   "horse", "buffalo", "bison", "rabbit", "hare", "squirrel", "bat"]
 
 def is_hibernation_season(today: date | None = None) -> bool:
-    """Check if current month is in hibernation season."""
     today = today or datetime.now().date()
     return today.month in HIBERNATION_MONTHS
 
 def mentions_animals(text: str) -> bool:
-    """Check if text mentions any animal keywords."""
-    t = (text or "").lower()
-    return any(k in t for k in ANIMAL_KEYWORDS)
+    return any(k in text.lower() for k in ANIMAL_KEYWORDS)
 
-# --- Trust tiers (simple, transparent scoring) ---
-# Higher is more trusted/preferred when choosing sources.
 DOMAIN_TRUST = {
-    # Official Navajo Nation / Diné Government
-    "navajo-nsn.gov": ("official", 1.00),
-    "courts.navajo-nsn.gov": ("official", 1.00),
-    "navajocourts.org": ("official", 1.00),
-    "nnwo.org": ("official", 0.95),
-
-    # Diné Education / Language
-    "dinecollege.edu": ("education", 0.95),  # Fixed: was "dincollege.edu"
-    "navajolanguageacademy.org": ("education", 0.92),
-    "roughrock.k12.az.us": ("education", 0.88),
-    "nau.edu": ("education", 0.90),
-    "navajotech.edu": ("education", 0.88),
-    "unm.edu": ("education", 0.85),
-
-    # Diné media / orgs
-    "navajotimes.com": ("dine_media", 0.85),
-    "navajocodetalkers.org": ("dine_org", 0.88),
-    "discovernavajo.com": ("tourism", 0.75),
-    "navajohopiobserver.com": ("dine_media", 0.85),
-    "dineta.com": ("dine_media", 0.85),
-    "ncai.org": ("indigenous_org", 0.80),
-
-    # Indigenous-led journalism
-    "ictnews.org": ("indigenous_media", 0.82),
-    "indiancountrytoday.com": ("indigenous_media", 0.82),
-    "nativeamericannews.net": ("indigenous_media", 0.75),
-
-    # Museums / archives
-    "americanindian.si.edu": ("museum", 0.80),
-    "loc.gov": ("archive", 0.80),
-    "pbs.org": ("public_media", 0.75),
+    "navajo-nsn.gov": ("official", 1.00), "courts.navajo-nsn.gov": ("official", 1.00),
+    "navajocourts.org": ("official", 1.00), "nnwo.org": ("official", 0.95),
+    "dinecollege.edu": ("education", 0.95), "navajolanguageacademy.org": ("education", 0.92),
+    "roughrock.k12.az.us": ("education", 0.88), "nau.edu": ("education", 0.90),
+    "navajotech.edu": ("education", 0.88), "unm.edu": ("education", 0.85),
+    "navajotimes.com": ("dine_media", 0.85), "navajocodetalkers.org": ("dine_org", 0.88),
+    "discovernavajo.com": ("tourism", 0.75), "navajohopiobserver.com": ("dine_media", 0.85),
+    "dineta.com": ("dine_media", 0.85), "ncai.org": ("indigenous_org", 0.80),
+    "ictnews.org": ("indigenous_media", 0.82), "indiancountrytoday.com": ("indigenous_media", 0.82),
+    "nativeamericannews.net": ("indigenous_media", 0.75), "americanindian.si.edu": ("museum", 0.80),
+    "loc.gov": ("archive", 0.80), "pbs.org": ("public_media", 0.75),
     "smithsonianmag.com": ("museum_media", 0.70),
 }
 
-USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1"
+USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15"
 
-# ----------------------------
-# 2) Minimal HTML -> Text
-# ----------------------------
 class TextExtractor(HTMLParser):
-    """Extract text content from HTML, ignoring scripts and styles."""
     def __init__(self):
         super().__init__()
         self._chunks = []
@@ -350,217 +321,84 @@ class TextExtractor(HTMLParser):
                 self._chunks.append(text + " ")
 
     def get_text(self):
-        """Get cleaned text from parsed HTML."""
         text = "".join(self._chunks)
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = re.sub(r"[ \t]{2,}", " ", text)
         return text.strip()
 
-# ===========================================
-# PASTE STEP 3 FUNCTIONS HERE - RIGHT HERE!
-# ===========================================
-
 def extract_text_from_pdf(pdf_content: bytes) -> str:
-    """
-    Extract clean text from PDF binary content using PyPDF2.
-    """
-    text = ""
-    
-    # Use PyPDF2 (available via apt)
-    if PDF_SUPPORT:
-        try:
-            with io.BytesIO(pdf_content) as pdf_file:
-                pdf_reader = PyPDF2.PdfReader(pdf_file)
-                pages = []
-                for page_num, page in enumerate(pdf_reader.pages):
-                    page_text = page.extract_text()
-                    if page_text:
-                        # Clean up common PDF artifacts
-                        page_text = re.sub(r'\s+', ' ', page_text)  # Normalize whitespace
-                        page_text = re.sub(r'[^\x20-\x7E\n\r\t]', '', page_text)  # Remove non-printable chars
-                        pages.append(page_text)
-                    else:
-                        print(f"⚠️  Page {page_num + 1} yielded no text")
-                
-                text = "\n\n".join(pages)
-                if text.strip():
-                    print(f"✅ Successfully extracted {len(pages)} pages with PyPDF2")
-                    return text
-        except Exception as e:
-            print(f"PyPDF2 extraction failed: {e}")
-    
-    return text
-
-def clean_html_from_pdf(html_content: str) -> str:
-    """
-    Clean up HTML that contains embedded PDF data.
-    This handles cases where the PDF is embedded in HTML.
-    """
-    # Remove PDF object markers and garbage
-    lines = html_content.split('\n')
-    clean_lines = []
-    
-    for line in lines:
-        # Skip lines that are clearly PDF objects or metadata
-        if re.match(r'\d+ \d+ obj', line):  # PDF object markers
-            continue
-        if re.match(r'<<.*>>', line):  # PDF dictionaries
-            continue
-        if re.match(r'stream|endstream', line):  # PDF stream markers
-            continue
-        if re.match(r'\/[A-Z][a-z]+', line):  # PDF commands
-            continue
-        if re.match(r'\[\d+ \d+ R\]', line):  # PDF references
-            continue
-        
-        # Keep lines that look like readable text
-        if len(line.strip()) > 20:  # Arbitrary threshold for meaningful content
-            clean_lines.append(line)
-    
-    return '\n'.join(clean_lines)
-
-# ===========================================
-# YOUR EXISTING fetch_url FUNCTION STARTS HERE
-# ===========================================
-
-def fetch_url(url: str, timeout: int = 15) -> str:
-    """Fetch URL content with proper error handling."""
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": USER_AGENT}
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            charset = resp.headers.get_content_charset() or "utf-8"
-            return resp.read().decode(charset, errors="ignore")
-    except Exception as e:
-        print(f"Error fetching {url}: {e}")
-        return ""
-
-def extract_text_from_pdf(pdf_content: bytes) -> str:
-    """
-    Extract clean text from PDF binary content using PyPDF2.
-    """
     if not PDF_SUPPORT:
         return ""
-    
     try:
         with io.BytesIO(pdf_content) as pdf_file:
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             pages = []
-            for page_num, page in enumerate(pdf_reader.pages):
+            for page in pdf_reader.pages:
                 page_text = page.extract_text()
                 if page_text:
-                    # Clean up the text
                     page_text = re.sub(r'\s+', ' ', page_text)
                     page_text = re.sub(r'[^\x20-\x7E\n\r\t]', '', page_text)
                     pages.append(page_text)
-            
-            if pages:
-                return "\n\n".join(pages)
-            else:
-                return ""
+            return "\n\n".join(pages) if pages else ""
     except Exception as e:
-        print(f"PDF extraction error: {e}")
+        logger.error(f"PDF extraction error: {e}")
         return ""
 
 def clean_pdf_garbage(html_content: str) -> str:
-    """
-    Remove PDF garbage and try to find readable text.
-    """
     lines = html_content.split('\n')
     readable_lines = []
-    
     for line in lines:
         line = line.strip()
-        # Skip empty lines
         if not line:
             continue
-        # Skip lines that are clearly PDF objects
-        if re.match(r'\d+ \d+ obj', line):
-            continue
-        if re.match(r'<<.*>>', line):
+        if re.match(r'\d+ \d+ obj', line) or re.match(r'<<.*>>', line):
             continue
         if 'stream' in line or 'endstream' in line:
             continue
-        if re.match(r'\/[A-Z][a-z]+', line):
+        if re.match(r'\/[A-Z][a-z]+', line) or 'uuid:' in line:
             continue
-        if 'uuid:' in line:
-            continue
-        # Keep lines that look like English text
         if re.search(r'[a-zA-Z]{3,} [a-zA-Z]{3,}', line):
             readable_lines.append(line)
-    
     return '\n'.join(readable_lines)
 
-
 def fetch_url(url: str, timeout: int = 15) -> str:
-    """Fetch URL content with PDF detection and extraction."""
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": USER_AGENT}
-    )
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             content_type = resp.headers.get('Content-Type', '')
             raw_content = resp.read()
             
-            # Handle PDF files
             if 'application/pdf' in content_type or url.lower().endswith('.pdf'):
-                print(f"📄 Processing PDF: {url}")
-                
-                # Try to extract text
                 text = extract_text_from_pdf(raw_content)
                 if text and len(text) > 100:
-                    print(f"✅ Extracted {len(text)} characters from PDF")
                     return text
-                else:
-                    # Fall back to cleaning garbage
-                    try:
-                        decoded = raw_content.decode('utf-8', errors='ignore')
-                        cleaned = clean_pdf_garbage(decoded)
-                        if cleaned:
-                            print(f"✅ Found {len(cleaned)} chars of readable text")
-                            return cleaned
-                        else:
-                            return "[PDF content could not be extracted]"
-                    except:
-                        return "[PDF: Could not decode content]"
+                try:
+                    decoded = raw_content.decode('utf-8', errors='ignore')
+                    cleaned = clean_pdf_garbage(decoded)
+                    return cleaned if cleaned else "[PDF content could not be extracted]"
+                except:
+                    return "[PDF: Could not decode content]"
             
-            # Handle HTML
             charset = resp.headers.get_content_charset() or "utf-8"
             return raw_content.decode(charset, errors="ignore")
-            
-    except urllib.error.URLError as e:
-        print(f"Network error fetching {url}: {e}")
-        return ""
     except Exception as e:
-        print(f"Error fetching {url}: {e}")
+        logger.error(f"Error fetching {url}: {e}")
         return ""
-
 
 def domain_of(url: str) -> str:
-    """Extract domain from URL."""
     try:
         return urllib.parse.urlparse(url).netloc.lower().lstrip("www.")
-    except Exception:
+    except:
         return ""
 
-
 def is_allowed(url: str) -> bool:
-    """Check if URL is from an allowed domain."""
-    # Allow explicitly trusted media URLs
     if url in ALLOWED_EXACT_URLS:
         return True
-
     d = domain_of(url)
     return any(d == ad or d.endswith("." + ad) for ad in ALLOWED_DOMAINS)
 
-
 def trust_for_url(url: str) -> tuple[str, float]:
-    """Get trust tier and score for a URL."""
     host = domain_of(url)
-    # Prefer the most-specific match (longest domain string)
     best = ("other", 0.50)
     best_len = 0
     for d, (tier, score) in DOMAIN_TRUST.items():
@@ -570,77 +408,24 @@ def trust_for_url(url: str) -> tuple[str, float]:
                 best_len = len(d)
     return best
 
-
 def label_for_source(domain: str, tier: str) -> str:
-    """Get friendly label for a source based on its tier."""
-    # Friendly labels for output/citations
     tier_labels = {
-        "official": "Navajo Nation (Official)",
-        "education": "Diné Education",
-        "dine_media": "Diné Media",
-        "dine_org": "Diné Organization",
-        "tourism": "Tourism / Information",
-        "indigenous_media": "Indigenous Journalism",
-        "museum": "Museum / Institution",
-        "archive": "Archive",
-        "public_media": "Public Media",
-        "museum_media": "Museum Media",
+        "official": "Navajo Nation (Official)", "education": "Diné Education",
+        "dine_media": "Diné Media", "dine_org": "Diné Organization",
+        "tourism": "Tourism / Information", "indigenous_media": "Indigenous Journalism",
+        "museum": "Museum / Institution", "archive": "Archive",
+        "public_media": "Public Media", "museum_media": "Museum Media",
     }
     return tier_labels.get(tier, domain)
 
-
-def source_label(url: str) -> str:
-    """Legacy function - kept for compatibility."""
-    d = domain_of(url)
-
-    # Highest priority: Diné / Navajo Nation institutions
-    if d.endswith("navajo-nsn.gov") or d.endswith("courts.navajo-nsn.gov"):
-        return "Navajo Nation (Official)"
-    
-    if d.endswith("dinecollege.edu"):
-        return "Diné College"
-    
-    if d.endswith("roughrock.k12.az.us"):
-        return "Rough Rock (Diné Education)"
-    
-    if d.endswith("navajotech.edu"):
-        return "Navajo Technical University"
-
-    # Strong Indigenous-led journalism / institutions
-    if d.endswith("ictnews.org"):
-        return "ICT News (Indigenous-led)"
-    
-    if d.endswith("indiancountrytoday.com"):
-        return "Indian Country Today"
-    
-    if d.endswith("americanindian.si.edu"):
-        return "Smithsonian NMAI / NK360"
-    
-    if d.endswith("loc.gov"):
-        return "Library of Congress"
-    
-    if d.endswith("pbs.org"):
-        return "PBS"
-
-    # Your "allowed but general" bucket
-    return d
-
-# ----------------------------
-# 3) DuckDuckGo HTML search
-# ----------------------------
 def ddg_search(query: str, max_results: int = 8) -> List[str]:
-    """Search DuckDuckGo and return list of result URLs."""
     q = urllib.parse.quote_plus(query)
     url = f"https://duckduckgo.com/html/?q={q}"
     html = fetch_url(url)
-    
     if not html:
         return []
     
-    # DuckDuckGo HTML results contain links like: <a rel="nofollow" class="result__a" href="...">
     links = re.findall(r'class="result__a"[^>]*href="([^"]+)"', html)
-    
-    # Clean up redirect links
     cleaned = []
     for link in links:
         if "duckduckgo.com/l/?" in link:
@@ -649,8 +434,7 @@ def ddg_search(query: str, max_results: int = 8) -> List[str]:
             if "uddg" in params:
                 link = urllib.parse.unquote(params["uddg"][0])
         cleaned.append(link)
-
-    # Deduplicate preserving order
+    
     seen = set()
     results = []
     for u in cleaned:
@@ -661,572 +445,322 @@ def ddg_search(query: str, max_results: int = 8) -> List[str]:
             break
     return results
 
-
-# ----------------------------
-# 4) Gather Diné-only sources
-# ----------------------------
 def gather_sources(question: str, max_pages: int = 6) -> List[Dict[str, Any]]:
-    """Gather sources from local documents AND allowed domains."""
-    
     sources = []
     
-    # STEP 1: Search local documents (instant, no internet needed)
-    print("📚 Searching local documents...")
-    documents = load_documents_from_folder()  # Load fresh each time
+    # Local documents
+    documents = load_documents_from_folder()
     doc_sources = search_documents(question, documents)
-    
     if doc_sources:
-        print(f"✅ Found {len(doc_sources)} relevant documents")
         sources.extend(doc_sources)
-    else:
-        print("📖 No relevant documents found")
     
-    # STEP 2: Search the web (your existing code)
-    print("\n🌐 Searching online sources...")
-    clean_q = (
-        question.replace("“", '"')
-                .replace("”", '"')
-                .replace("’", "'")
-                .replace("‘", "'")
-                .strip()
-    )
-
-    topic = clean_q.strip().lower()
-
-    # Build search query based on question type
-    kinship_terms = ["grandmother", "grandfather", "mother", "father",
-                     "aunt", "uncle", "sister", "brother", "clan", "family", "relative"]
-    story_terms = ["coyote", "black god", "holy people", "ceremony",
-                   "creation", "monster slayer", "born for water", "story"]
-
-    if any(word in topic for word in kinship_terms):
+    # Web search
+    clean_q = question.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'").strip()
+    topic = clean_q.lower()
+    
+    kinship_terms = ["grandmother", "grandfather", "mother", "father", "aunt", "uncle", "sister", "brother", "clan", "family", "relative"]
+    story_terms = ["coyote", "black god", "holy people", "ceremony", "creation", "monster slayer", "born for water", "story"]
+    
+    if any(w in topic for w in kinship_terms):
         search_query = f"{clean_q} Diné Navajo kinship term family relationship"
-    elif any(word in topic for word in story_terms):
+    elif any(w in topic for w in story_terms):
         search_query = f"{clean_q} Diné Navajo teaching story holy people meaning"
     elif len(topic) < 12:
         search_query = f"{clean_q} Diné Navajo culture kinship hózhó"
     else:
         search_query = f"{clean_q} Navajo Diné culture k'é hózhó"
-
-    # First try: plain search
+    
     urls = ddg_search(search_query, max_results=12)
-
-    # Filter to allowlisted domains
     allowed_urls = [u for u in urls if is_allowed(u)]
-
-    # If nothing passes allowlist, try per-domain site: queries
+    
     if not allowed_urls:
         urls = []
         for d in sorted(ALLOWED_DOMAINS):
             q = f"site:{d} {clean_q} Navajo Diné k'é hózhó"
             urls.extend(ddg_search(q, max_results=8))
         allowed_urls = [u for u in urls if is_allowed(u)]
-
-    # Limit how many pages we fetch
+    
     allowed_urls = allowed_urls[:max_pages]
-
-    # Always include explicitly trusted media URLs (exact match only)
-    trusted_urls = list(ALLOWED_EXACT_URLS)
-
-    # Combine trusted + search results (dedupe)
+    
     combined_urls = []
     seen = set()
-    for u in (trusted_urls + allowed_urls):
+    for u in (list(ALLOWED_EXACT_URLS) + allowed_urls):
         if u not in seen:
             seen.add(u)
             combined_urls.append(u)
-
+    
     for u in combined_urls:
         tier, score = trust_for_url(u)
         try:
             html = fetch_url(u, timeout=15)
             if not html:
                 continue
-
+            
             parser = TextExtractor()
             parser.feed(html)
             full_text = parser.get_text()
-
+            
             paragraphs = [p.strip() for p in full_text.split("\n") if p.strip()]
-
-            priority_terms = [
-                "navajo", "diné", "dine", "k'e", "k’é", "kinship", "clan", "clans",
-                "hozho", "hózhó", "harmony", "balance", "community", "responsibility"
-            ]
-
-            relevant_parts = []
-            for p in paragraphs:
-                p_low = p.lower()
-                if any(term in p_low for term in priority_terms):
-                    relevant_parts.append(p)
-
-            if relevant_parts:
-                text = "\n\n".join(relevant_parts)[:12000]
-            else:
-                text = full_text[:12000]
-
-            # Skip if no relevant content
+            priority_terms = ["navajo", "diné", "dine", "k'e", "k’é", "kinship", "clan", "hozho", "hózhó", "harmony", "balance"]
+            
+            relevant_parts = [p for p in paragraphs if any(term in p.lower() for term in priority_terms)]
+            text = "\n\n".join(relevant_parts)[:12000] if relevant_parts else full_text[:12000]
+            
             t = text.lower()
-            if ("navajo" not in t) and ("diné" not in t) and ("dine" not in t):
-                continue
-                
-            sources.append({
-                "url": u,
-                "domain": domain_of(u),
-                "tier": tier,
-                "trust": score,
-                "label": label_for_source(domain_of(u), tier),
-                "text": text,
-            })
+            if ("navajo" in t) or ("diné" in t) or ("dine" in t):
+                sources.append({
+                    "url": u, "domain": domain_of(u), "tier": tier,
+                    "trust": score, "label": label_for_source(domain_of(u), tier),
+                    "text": text,
+                })
         except Exception as e:
-            print(f"Error processing {u}: {e}")
+            logger.error(f"Error processing {u}: {e}")
             continue
-
-    # Sort all sources by trust
+    
     sources.sort(key=lambda s: s.get("trust", 0), reverse=True)
     return sources
 
-# ----------------------------------------
-# 5) (Optional) Ask OpenAI using ONLY sources
-# ----------------------------------------
-def answer_with_openai(question: str, sources: List[Dict[str, Any]], principles: Dict[str, Any]) -> str:
-    """Generate answer using OpenAI API based on provided sources."""
+def answer_with_openai(question: str, sources: List[Dict[str, Any]], principles: Dict[str, Any]) -> Optional[str]:
     if not OPENAI_AVAILABLE:
-        raise RuntimeError("OpenAI package not installed in this environment.")
-
-    api_key = load_api_key_from_file()
-    if not api_key:
-        raise RuntimeError("OpenAI API key not found or empty.")
+        return None
     
-    openai.api_key = api_key
-
     src_lines = []
-    for i, s in enumerate(sources, start=1):
-        label = s.get("label") or s.get("tier", "other")
-        url = s.get("url", "")
+    for i, s in enumerate(sources[:5], 1):
         text = (s.get("text") or "").strip()
-
         if not text:
             continue
-
-        snippet = " ".join(text.split())[:1000]
-
-        src_lines.append(
-            f"[{i}] {label} ({url})\n"
-            f"Snippet: {snippet}"
-        )
-
-    if not src_lines:
-        return "No valid sources found with content to answer the question."
-
-    sources_block = "\n\n".join(src_lines)
-
-    system = (
-        "You are a helpful assistant that answers ONLY using the provided sources.\n"
-        "Write a detailed, well-structured answer of 2-3 paragraphs.\n"
-        "Start with a brief overview, then expand with specific details from the sources.\n"
-        "Use paragraphs to separate different aspects of the answer.\n"
-        "Cite sources like [1], [2] within the text.\n"
-    )
-
-    principles_text = ", ".join(principles.keys()) if principles else "none detected"
+        snippet = " ".join(text.split())[:800]
+        src_lines.append(f"[{i}] {s.get('label', 'Source')} ({s.get('url', '')})\n{snippet}")
     
-    prompt = (
-        f"Question: {question}\n\n"
-        f"Detected Diné cultural principles: {principles_text}\n\n"
-        f"Allowed sources:\n{sources_block}\n\n"
-        "Answer using ONLY the sources above. Provide a detailed response of 2-3 paragraphs. "
-        "Include specific examples and cite sources like [1], [2]."
-    )
-
+    if not src_lines:
+        return None
+    
+    prompt = f"Question: {question}\n\nSources:\n{chr(10).join(src_lines)}\n\nAnswer based ONLY on these sources. Be detailed and cite sources like [1]."
+    
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
+                {"role": "system", "content": "You are a helpful assistant that answers using only the provided sources."},
+                {"role": "user", "content": prompt}
             ],
-            temperature=0.2,
+            temperature=0.3,
+            max_tokens=500
         )
         return response["choices"][0]["message"]["content"]
     except Exception as e:
-        raise RuntimeError(f"OpenAI API call failed: {e}")
+        logger.error(f"OpenAI error: {e}")
+        return None
 
 def detect_principles(sources: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Very simple keyword-based detector.
-    Returns a dict like {"k'e": {"hits": 3, "evidence": [...]}, ...}
-    """
-    # Normalize text for matching
-    def norm(s):
-        return (s or "").lower().replace("’", "'")
-
-    # Principle keywords you care about (expand any time)
+    def norm(s): return (s or "").lower().replace("’", "'")
+    
     PRINCIPLES = {
-        "k'é (kinship / relational responsibility)": [
-            "k'e", "k’é", "kinship", "clan", "clans", "affiliation",
-            "relative", "relatives", "relationship", "relationships"
-        ],
-        "hózhó (balance / harmony)": [
-            "hozho", "hózhó", "harmony", "balance", "beauty", "order"
-        ],
-        "community responsibility": [
-            "community", "responsibility", "solidarity", "respect",
-            "kindness", "generosity", "peaceful", "care", "support", "cooperation", "mutual", "sharing" 
-        ],
-        "matrilineal / matrilocal (family structure)": [
-            "matrilineal", "matrilocal", "descent", "mother", "household", "maternal"
-        ],
+        "k'é (kinship / relational responsibility)": ["k'e", "k’é", "kinship", "clan", "relative", "relationship"],
+        "hózhó (balance / harmony)": ["hozho", "hózhó", "harmony", "balance", "beauty"],
+        "community responsibility": ["community", "responsibility", "respect", "kindness", "generosity", "cooperation"],
+        "matrilineal / matrilocal": ["matrilineal", "matrilocal", "descent", "mother", "maternal"],
     }
-
+    
     found = {}
     for s in sources:
         text = norm(s.get("text", ""))
-        if not text:
-            continue
-
         for pname, kws in PRINCIPLES.items():
-            hits = sum(text.count(norm(k)) for k in kws if k.strip())
+            hits = sum(text.count(norm(k)) for k in kws)
             if hits > 0:
                 if pname not in found:
                     found[pname] = {"hits": 0, "evidence": []}
                 found[pname]["hits"] += hits
+    return dict(sorted(found.items(), key=lambda x: x[1]["hits"], reverse=True))
 
-                # Save a short evidence snippet (first match area)
-                for k in kws:
-                    k2 = norm(k)
-                    idx = text.find(k2)
-                    if idx != -1:
-                        start = max(0, idx - 120)
-                        end = min(len(text), idx + 240)
-                        snippet = text[start:end].strip()
-                        # avoid duplicates
-                        if snippet and snippet not in found[pname]["evidence"]:
-                            found[pname]["evidence"].append(snippet)
-                        break
-
-    # Sort by hits
-    found = dict(sorted(found.items(), key=lambda kv: kv[1]["hits"], reverse=True))
-    return found
-
-
-def generate_better_summary(source: Dict[str, Any], question: str) -> str:
-    """Generate a multi-paragraph summary from the most relevant source."""
+def generate_summary(source: Dict[str, Any], question: str) -> str:
     text = source.get('text', '')
     if not text:
         return "No content available."
     
-    # Define question_lower here
-    question_lower = question.lower()
+    paragraphs = [p for p in text.split('\n\n') if len(p) > 100 and not re.search(r'plate\s+\d+|fig\.\s+\d+|page\s+\d+', p.lower())]
     
-    # Split into paragraphs
-    all_paragraphs = text.split('\n\n')
+    # Find relevant paragraphs
+    keywords = [w for w in question.lower().split() if len(w) > 3 and w not in {'the','what','how','why','does','tell'}]
+    scored = [(sum(p.lower().count(k) for k in keywords), p) for p in paragraphs]
+    scored.sort(reverse=True)
     
-    # Skip Gutenberg header (first few paragraphs)
-    start_idx = 0
-    for i, p in enumerate(all_paragraphs[:15]):
-        p_lower = p.lower()
-        if "project gutenberg" in p_lower or "ebook" in p_lower or "www.gutenberg" in p_lower:
-            start_idx = i + 1
-    
-    # Get content paragraphs (skip header)
-    content_paragraphs = all_paragraphs[start_idx:]
-    
-    # Find paragraphs relevant to the question
-    question_words = set(question_lower.split())
-    stop_words = {'the', 'a', 'an', 'is', 'at', 'which', 'on', 'and', 'or', 'to', 'in', 'for', 'describe', 'traditional', 'what', 'how', 'why', 'does'}
-    keywords = [w for w in question_words if w not in stop_words and len(w) > 3]
-    
-    # Score each paragraph for relevance
-    scored_paragraphs = []
-    for p in content_paragraphs:
-        if len(p) < 100:  # Skip very short paragraphs
-            continue
-            
-        p_lower = p.lower()
-        
-        # SKIP paragraphs that look like Table of Contents
-        if re.search(r'plate\s+\d+|fig\.\s+\d+|page\s+\d+|^\d+$', p_lower):
-            continue
-            
-        # SKIP lines with lots of numbers or dashes (TOC formatting)
-        if len(re.findall(r'\d+', p)) > 5:
-            continue
-            
-        score = 0
-        
-        # Count keyword matches
-        for keyword in keywords:
-            score += p_lower.count(keyword) * 2
-        
-        # Boost score for paragraphs with topic-specific terms
-        if "weav" in question_lower:
-            weaving_terms = ["weav", "loom", "blanket", "wool", "spindle", "warp", "weft", "heald", "diagonal", "pattern", "design", "thread", "yarn"]
-            for term in weaving_terms:
-                if term in p_lower:
-                    score += 3
-        
-        # Boost for paragraphs with substantial length (real content)
-        if len(p) > 300:
-            score += 2
-        
-        if score > 0:
-            scored_paragraphs.append((score, p))
-    
-    # Sort by relevance
-    scored_paragraphs.sort(reverse=True)
-    
-    # Build a multi-paragraph summary
-    summary_paragraphs = []
-    
-    if scored_paragraphs:
-        # Take top 3 most relevant paragraphs
-        for i in range(min(3, len(scored_paragraphs))):
-            para = scored_paragraphs[i][1].strip()
-            # Clean up the paragraph
-            para = re.sub(r'\s+', ' ', para)
-            para = re.sub(r'[ \t]+', ' ', para)
-            summary_paragraphs.append(para)
-    else:
-        # Fallback: take first 3 substantial paragraphs (skipping TOC)
-        count = 0
-        for p in content_paragraphs:
-            # Skip TOC-like paragraphs
-            if re.search(r'plate\s+\d+|fig\.\s+\d+', p.lower()):
-                continue
-            if len(p) > 200 and count < 3:
-                clean_p = re.sub(r'\s+', ' ', p.strip())
-                summary_paragraphs.append(clean_p)
-                count += 1
-    
-    # Format the summary with paragraph breaks
-    if summary_paragraphs:
-        formatted_summary = "\n\n".join(summary_paragraphs)
-        return formatted_summary
-    else:
-        # Ultimate fallback - take any paragraph with weaving-related terms
-        for p in content_paragraphs:
-            if "weav" in p.lower() and len(p) > 150:
-                return re.sub(r'\s+', ' ', p.strip())
-        
-        return "Information about Navajo weaving found in sources."
+    summary = "\n\n".join([p for _, p in scored[:3]])
+    return summary if summary else paragraphs[0][:500] if paragraphs else "Information found in sources."
 
-def extract_relevant_excerpt(source: Dict[str, Any], question: str) -> str:
-    """Extract a relevant excerpt from the source."""
+def extract_excerpt(source: Dict[str, Any], question: str) -> str:
     text = source.get('text', '')
     if not text:
         return "No excerpt available."
     
-    # Split into sentences (simple approach)
     sentences = re.split(r'[.!?]+', text)
-    
-    # Find sentences with question keywords
     keywords = [w for w in question.lower().split() if len(w) > 3]
-    scored_sentences = []
     
-    for i, sentence in enumerate(sentences):
-        sentence = sentence.strip()
-        if len(sentence) < 20 or "project gutenberg" in sentence.lower():
-            continue
-        
-        score = 0
-        for keyword in keywords:
-            if keyword in sentence.lower():
-                score += 1
-        
-        if score > 0:
-            scored_sentences.append((score, sentence))
+    scored = [(sum(k in s.lower() for k in keywords), s.strip()) for s in sentences if len(s.strip()) > 40]
+    if scored:
+        scored.sort(reverse=True)
+        return scored[0][1] + "."
     
-    if scored_sentences:
-        # Sort by relevance and return the best one
-        scored_sentences.sort(reverse=True)
-        return scored_sentences[0][1] + "."
-    
-    # Fallback: return first substantial sentence
-    for sentence in sentences:
-        if len(sentence) > 50 and "project gutenberg" not in sentence.lower():
-            return sentence.strip() + "..."
-    
+    for s in sentences:
+        if len(s.strip()) > 50:
+            return s.strip() + "..."
     return "See sources for more information."
 
-def print_fallback_answer(question: str, sources: List[Dict[str, Any]]):
-    """
-    Prints a structured answer without OpenAI, using only extracted sources.
-    Prioritizes the most relevant source for the summary.
-    """
-    principles = detect_principles(sources)
-
-    print("\n=== Diné-principled fallback (no OpenAI) ===\n")
-    print("Question:", question.strip(), "\n")
-
+def print_fallback_answer(question: str, sources: List[Dict[str, Any]]) -> str:
+    output = []
+    
     if not sources:
-        print("I couldn't retrieve any sources from the allowed domains.")
-        return
-
-    # Find the most relevant source for this question
-    primary_source = sources[0]  # First source is usually most relevant
-    question_lower = question.lower()
+        return "I couldn't find any relevant sources about that topic. Please try rephrasing your question."
     
-    # Check for specific topics to prioritize the right document
-    if "weav" in question_lower:
-        for source in sources:
-            url = source.get('url', '').lower()
-            if "weaver" in url or "weav" in url:
-                primary_source = source
-                print(f"📌 Prioritized weaving document for this question")
-                break
+    primary = sources[0]
+    summary = generate_summary(primary, question)
+    excerpt = extract_excerpt(primary, question)
     
-    if "black god" in question_lower or "haashch" in question_lower:
-        for source in sources:
-            url = source.get('url', '').lower()
-            if "black_god" in url or "legend" in url:
-                primary_source = source
-                print(f"📌 Prioritized Black God document for this question")
-                break
+    output.append(f'<div style="line-height: 1.6;">')
+    output.append(f'<p><strong>📖 Summary:</strong></p>')
+    output.append(f'<p>{summary}</p>')
+    output.append(f'<hr style="margin: 15px 0;">')
+    output.append(f'<p><strong>📝 Key Excerpt:</strong></p>')
+    output.append(f'<p style="background: #f5f5f5; padding: 12px; border-left: 3px solid #2c5f2d; font-style: italic;">"{excerpt}"</p>')
+    output.append(f'<p><strong>📚 Sources:</strong></p>')
+    output.append(f'<ul>')
+    for i, s in enumerate(sources[:3], 1):
+        url = s.get('url', 'Unknown')
+        trust_badge = get_trust_badge(s.get('trust', 0.5))
+        display_url = url.replace('local:', '📄 ') if url.startswith('local:') else url
+        output.append(f'<li style="margin-bottom: 8px;">[{i}] {display_url} {trust_badge}</li>')
+    output.append(f'</ul>')
+    output.append(f'</div>')
     
-    # Extract a better summary from the primary source
-    print("Quick summary:")
-    print(generate_better_summary(primary_source, question))
-    print()
+    return '\n'.join(output)
 
-    # List all sources used
-    print("Sources used:")
-    for i, s in enumerate(sources, start=1):
-        source_name = s.get('url', 'Unknown')
-        if source_name.startswith('local:'):
-            # Clean up the display name
-            display_name = source_name.replace('local:', '📚 ')
-        else:
-            display_name = source_name
-        # Mark the primary source
-        if s == primary_source:
-            print(f"[{i}] {display_name} ⭐ (primary source)")
-        else:
-            print(f"[{i}] {display_name}")
-    print()
-
-    # Flask web app for Render deployment
-    # Show a relevant excerpt from the primary source
-    print("Relevant excerpt:")
-    excerpt = extract_relevant_excerpt(primary_source, question)
-    # Wrap excerpt for better display
-    words = excerpt.split()
-    lines = []
-    current_line = []
-    for word in words:
-        current_line.append(word)
-        if len(' '.join(current_line)) > 70:
-            lines.append(' '.join(current_line))
-            current_line = []
-    if current_line:
-        lines.append(' '.join(current_line))
-    
-    for line in lines:
-        print(f"  {line}")
-    print()
-
-    # If we found no principles, say so plainly
-    if not principles:
-        print("I found sources, but they didn't contain clear Diné principle terms.")
-        return
-
-    # Show what principles were detected
-    print("Cultural principles detected in sources:")
-    for p, data in principles.items():
-        print(f"  • {p}: {data['hits']} occurrences")
-    print() 
-
-    
-# HTML template for the web interface
+# Enhanced HTML template with all features
 HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Diné Cultural Chatbot</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diné Cultural Learning Bot</title>
     <style>
-        body { font-family: Arial; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .question { margin: 20px 0; }
-        textarea { width: 100%; height: 100px; }
-        button { padding: 10px 20px; background: #4CAF50; color: white; border: none; cursor: pointer; }
-        .answer { background: #f9f9f9; padding: 20px; border-radius: 5px; margin-top: 20px; }
-        .sources { font-size: 0.9em; color: #666; }
-    </style>
-</head>
-<body>
-    <h1>Diné Cultural Chatbot</h1>
-    <div class="question">
-        <form method="POST">
-            <textarea name="question" placeholder="Ask about Diné culture...">{{ question }}</textarea><br>
-            <button type="submit">Ask</button>
-        </form>
-    </div>
-    {% if answer %}
-    <div class="answer">
-        <h3>Answer:</h3>
-        {{ answer | safe }}
-    </div>
-    {% endif %}
-</body>
-</html>
-"""
-
-@app.route('/', methods=['GET', 'POST'])
-def home():
-    question = ""
-    answer = ""
-    
-    if request.method == 'POST':
-        question = request.form.get('question', '')
-        
-        # Check seasonal restrictions
-        if SEASONAL_MODE and is_hibernation_season() and mentions_animals(question):
-            answer = "During winter months (November-March), we avoid discussing certain animals per Diné tradition. Please ask about other aspects of Diné culture."
-        else:
-            # Check if question is about Diné culture or related topics
-            dine_keywords = [
-                'diné', 'navajo', 'k\'é', 'k\'e', 'hozho', 'hózhó', 
-                'clan', 'weaving', 'ceremony', 'traditional', 
-                'long walk', 'bosque redondo', 'treaty',
-                'friend', 'friends', 'family', 'kinship', 'relationship', 
-                'respect', 'harmony', 'balance', 'community',
-                'teaching', 'value', 'values', 'way', 'ways',
-                'how do', 'how to', 'what is', 'meaning of'
-                'marriage', 'wedding', 'husband', 'wife', 'partner', 'spouse'
-            ]
-            
-            # Also check if question is about social/human topics
-            social_topics = ['friend', 'family', 'relationship', 'respect', 'help', 'care', 'support', 'community', 'together', 'marraige']
-            
-            # Check if question is clearly off-topic (block obvious non-Diné questions)
-            off_topic_keywords = ['martha stewart', 'sports', 'politics', 'movie', 'music', 'celebrity', 'business', 'stock market', 'computer', 'phone', 'car', 'weather', 'sports team']
-            is_off_topic = any(keyword in question.lower() for keyword in off_topic_keywords)
-            
-            if is_off_topic:
-                answer = "I'm designed to answer questions about Diné (Navajo) culture, language, and traditions. Please ask about topics like k'é (kinship), hózhó (harmony), Diné history, or traditional practices."
-            else:
-                # Gather sources
-                sources = gather_sources(question)
-                principles = detect_principles(sources)
-                
-                # Check if we have any valid sources
-                if not sources or not any(s.get('text') for s in sources):
-                    answer = "I couldn't find any relevant sources about that topic. Please try rephrasing your question."
-                else:
-                    # Generate answer
-                    if OPENAI_AVAILABLE:
-                        answer = answer_with_openai(question, sources, principles)
-                    else:
-                        # Capture print_fallback_answer output
-                        import io
-                        import sys
-                        captured = io.StringIO()
-                        sys.stdout = captured
-                        print_fallback_answer(question, sources)
-                        sys.stdout = sys.__stdout__
-                        answer = captured.getvalue().replace('\n', '<br>')
-    
-    return render_template_string(HTML_TEMPLATE, question=question, answer=answer)
-if __name__ == "__main__":
-    # This is for local development only
-    # Render uses gunicorn to run the app
-    app.run(host='0.0.0.0', port=5000, debug=True)
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+            min-height: 100vh;
+            padding: 20px;
+            transition: background 0.3s, color 0.3s;
+        }
+        body.dark-mode {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+        body.dark-mode .container {
+            background: #1e2a3a;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c5f2d 0%, #1e3a1e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 2em; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 1.1em; }
+        .theme-toggle {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            background: rgba(44, 95, 45, 0.9);
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 10px 15px;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+            z-index: 1000;
+        }
+        .theme-toggle:hover { transform: scale(1.05); }
+        .content { padding: 30px; }
+        .protocol-box {
+            background: #fdf2e9;
+            border-left: 4px solid #d35400;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+        body.dark-mode .protocol-box {
+            background: #2d2a1e;
+            border-left-color: #e67e22;
+        }
+        .welcome-box {
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+        body.dark-mode .welcome-box {
+            background: #1e3a2f;
+        }
+        .example-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .example-btn {
+            background: white;
+            border: 1px solid #2c5f2d;
+            color: #2c5f2d;
+            padding: 8px 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .example-btn:hover {
+            background: #2c5f2d;
+            color: white;
+            transform: translateY(-2px);
+        }
+        body.dark-mode .example-btn {
+            background: #2c5f2d;
+            color: white;
+            border-color: #4cae4c;
+        }
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #2c5f2d;
+        }
+        body.dark-mode textarea {
+            background: #2d3e2d;
+            color: white;
+            border-color: #4cae4c;
+        }
+        button.submit-btn {
+            background: #2c5f2d;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius:
