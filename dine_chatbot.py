@@ -33,10 +33,11 @@ DID_YOU_KNOW_FACTS = [
     "Traditional Navajo names are often given in ceremonies and hold deep spiritual significance.",
 ]
 
-# Comprehensive knowledge base with better matching
-KNOWLEDGE_BASE = {
-    "k'e": {
-        "keywords": ["k'é", "k'e", "kinship", "family", "relative", "relationship", "relatives", "clan", "family ties", "family bond", "how are people related"],
+# Comprehensive knowledge base with improved matching
+KNOWLEDGE_BASE = [
+    {
+        "topic": "k'e",
+        "keywords": ["k'é", "k'e", "kinship", "family", "relative", "relationship", "relatives", "family ties", "family bond", "how are people related", "what is k'é", "what is k'e", "what is kinship"],
         "answer": """
             <div style="line-height: 1.6;">
                 <p><strong>🌿 What is K'é?</strong></p>
@@ -70,9 +71,9 @@ KNOWLEDGE_BASE = {
             </div>
         """
     },
-    
-    "clan": {
-        "keywords": ["clan", "clans", "dóoneʼé", "doonee", "clan system", "matrilineal", "how clans work", "clan structure", "original clans"],
+    {
+        "topic": "clan",
+        "keywords": ["clan", "clans", "dóoneʼé", "doonee", "clan system", "matrilineal", "how clans work", "clan structure", "original clans", "tell me about navajo clans", "navajo clan system", "what are navajo clans"],
         "answer": """
             <div style="line-height: 1.6;">
                 <p><strong>🏠 Navajo Clans (Dóoneʼé)</strong></p>
@@ -106,9 +107,9 @@ KNOWLEDGE_BASE = {
             </div>
         """
     },
-    
-    "hózhó": {
-        "keywords": ["hózhó", "hozho", "harmony", "balance", "beauty", "wellness", "peace", "hozhooji", "walk in beauty", "beautiful"],
+    {
+        "topic": "hózhó",
+        "keywords": ["hózhó", "hozho", "harmony", "balance", "beauty", "wellness", "peace", "hozhooji", "walk in beauty", "beautiful", "what does hózhó mean", "what is hózhó", "what does hozho mean"],
         "answer": """
             <div style="line-height: 1.6;">
                 <p><strong>✨ Hózhó: Beauty, Harmony, and Balance</strong></p>
@@ -139,9 +140,9 @@ KNOWLEDGE_BASE = {
             </div>
         """
     },
-    
-    "weaving": {
-        "keywords": ["weav", "weaving", "weaver", "blanket", "rug", "loom", "spider woman", "spider rock", "spider grandm", "weaving tradition", "navajo rug", "navajo blanket"],
+    {
+        "topic": "weaving",
+        "keywords": ["weav", "weaving", "weaver", "blanket", "rug", "loom", "spider woman", "spider rock", "spider grandm", "weaving tradition", "navajo rug", "navajo blanket", "tell me about navajo weaving", "navajo weaving traditions"],
         "answer": """
             <div style="line-height: 1.6;">
                 <p><strong>🪶 Navajo Weaving (Diyin Dineʼé Binaaltsoos)</strong></p>
@@ -172,9 +173,9 @@ KNOWLEDGE_BASE = {
             </div>
         """
     },
-    
-    "code talker": {
-        "keywords": ["code talker", "code talkers", "wwii", "world war", "world war 2", "world war ii", "navajo code", "unbreakable code", "marine", "code", "encryption"],
+    {
+        "topic": "code talker",
+        "keywords": ["code talker", "code talkers", "wwii", "world war", "world war 2", "world war ii", "navajo code", "unbreakable code", "marine", "code", "encryption", "who were the navajo code talkers", "navajo code talkers"],
         "answer": """
             <div style="line-height: 1.6;">
                 <p><strong>📡 The Navajo Code Talkers</strong></p>
@@ -206,9 +207,9 @@ KNOWLEDGE_BASE = {
             </div>
         """
     },
-    
-    "sacred mountains": {
-        "keywords": ["sacred mountain", "sacred mountains", "mountains", "four mountains", "sisnaajiní", "tsoodził", "dookʼoʼoosłííd", "dibé nitsaa", "blanca peak", "mount taylor", "san francisco peaks", "hesperus"],
+    {
+        "topic": "sacred mountains",
+        "keywords": ["sacred mountain", "sacred mountains", "mountains", "four mountains", "sisnaajiní", "tsoodził", "dookʼoʼoosłííd", "dibé nitsaa", "blanca peak", "mount taylor", "san francisco peaks", "hesperus", "what are the four sacred mountains", "four sacred mountains"],
         "answer": """
             <div style="line-height: 1.6;">
                 <p><strong>⛰️ The Four Sacred Mountains of the Diné</strong></p>
@@ -232,9 +233,9 @@ KNOWLEDGE_BASE = {
             </div>
         """
     },
-    
-    "long walk": {
-        "keywords": ["long walk", "bosque redondo", "fort sumner", "1864", "1868", "treaty of 1868", "navajo removal", "forced march", "hweeldi"],
+    {
+        "topic": "long walk",
+        "keywords": ["long walk", "bosque redondo", "fort sumner", "1864", "1868", "treaty of 1868", "navajo removal", "forced march", "hweeldi", "what was the long walk", "the long walk"],
         "answer": """
             <div style="line-height: 1.6;">
                 <p><strong>👣 The Long Walk (Hwéeldi)</strong></p>
@@ -259,24 +260,34 @@ KNOWLEDGE_BASE = {
             </div>
         """
     }
-}
+]
 
 def get_answer_from_knowledge(question):
-    """Match question to knowledge base with improved keyword matching"""
-    q_lower = question.lower()
+    """Match question to knowledge base with improved matching"""
+    if not question:
+        return None
+    
+    # Convert to lowercase for matching
+    q_lower = question.lower().strip()
+    
+    # Log what we're trying to match
+    logger.info(f"Looking for match for: '{q_lower}'")
     
     # Check each topic
-    for topic, data in KNOWLEDGE_BASE.items():
-        for keyword in data["keywords"]:
+    for topic_data in KNOWLEDGE_BASE:
+        for keyword in topic_data["keywords"]:
             if keyword in q_lower:
-                logger.info(f"Matched question to topic: {topic} (keyword: {keyword})")
-                return data["answer"]
+                logger.info(f"✅ Matched '{q_lower}' to topic '{topic_data['topic']}' via keyword '{keyword}'")
+                return topic_data["answer"]
     
-    # If no match found, return None
+    logger.info(f"❌ No match found for '{q_lower}'")
     return None
 
 def generate_answer(question):
     """Generate answer from knowledge base"""
+    if not question:
+        return "Please enter a question."
+    
     # First check knowledge base
     answer = get_answer_from_knowledge(question)
     if answer:
@@ -286,7 +297,7 @@ def generate_answer(question):
     return f"""
     <div style="line-height: 1.6;">
         <p><strong>📖 Learning About Diné Culture</strong></p>
-        <p>I'm still learning about that specific topic. Here are some topics I can help you with:</p>
+        <p>I'm still learning about "{question}". Here are some topics I can help you with:</p>
         <ul>
             <li><strong>K'é</strong> - kinship, family, and relationships</li>
             <li><strong>Clans (Dóoneʼé)</strong> - the Navajo clan system and matrilineal structure</li>
@@ -297,7 +308,7 @@ def generate_answer(question):
             <li><strong>The Long Walk</strong> - the forced relocation of 1864-1868</li>
         </ul>
         
-        <p><strong>Try asking:</strong></p>
+        <p><strong>Try asking exactly:</strong></p>
         <ul>
             <li>"What is k'é?"</li>
             <li>"Tell me about Navajo clans"</li>
@@ -305,15 +316,15 @@ def generate_answer(question):
             <li>"Tell me about Navajo weaving"</li>
             <li>"Who were the Code Talkers?"</li>
             <li>"What are the four sacred mountains?"</li>
-            <li>"What happened during the Long Walk?"</li>
+            <li>"What was the Long Walk?"</li>
         </ul>
         
         <hr>
-        <p><em>💡 Tip: Try using the example buttons above or ask about one of the specific topics listed!</em></p>
+        <p><em>💡 Tip: Click one of the example buttons above for a guaranteed answer!</em></p>
     </div>
     """
 
-# HTML Template - COMPLETE
+# HTML Template (same as before, but shortened for brevity)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -602,7 +613,7 @@ HTML_TEMPLATE = """
                     <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
                     <button class="example-btn" data-question="Tell me about Navajo clans">👨‍👩‍👧‍👦 Tell me about Navajo clans</button>
                     <button class="example-btn" data-question="What does hózhó mean?">☯️ What does hózhó mean?</button>
-                    <button class="example-btn" data-question="Tell me about Navajo weaving traditions">🪶 Tell me about Navajo weaving</button>
+                    <button class="example-btn" data-question="Tell me about Navajo weaving">🪶 Tell me about Navajo weaving</button>
                     <button class="example-btn" data-question="Who were the Navajo Code Talkers?">📡 Who were the Navajo Code Talkers?</button>
                     <button class="example-btn" data-question="What are the four sacred mountains?">⛰️ What are the four sacred mountains?</button>
                     <button class="example-btn" data-question="What was the Long Walk?">👣 What was the Long Walk?</button>
