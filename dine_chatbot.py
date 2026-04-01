@@ -1,25 +1,28 @@
 import re
 import sys
-import io
-import os
-import random
-import threading
-import logging
+import time
+import json
 import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
-from datetime import datetime
-from typing import List, Dict, Any, Optional
+from datetime import datetime, date
+from typing import List, Dict, Any, Optional, Tuple, Set
+import io
+import threading
+import logging
+import os
+import random
+
 from flask import Flask, request, render_template_string
 
-# Setup logging
+# Setup logging for Render
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create Flask app
 app = Flask(__name__)
 
-# Did You Know facts
+# Did You Know facts (new addition)
 DID_YOU_KNOW_FACTS = [
     "The Navajo language was used as a code during WWII by the famous Code Talkers - it was never broken!",
     "K'é (kinship) extends beyond blood relations to include all of creation.",
@@ -29,302 +32,372 @@ DID_YOU_KNOW_FACTS = [
     "Weaving was taught to the Navajo by Spider Woman, a holy being.",
     "The Navajo Nation is the largest Native American reservation in the United States.",
     "In Diné tradition, the number four is sacred - representing the four directions.",
-    "The Navajo creation story tells of the Diné emerging through four worlds.",
-    "Traditional Navajo names are often given in ceremonies and hold deep spiritual significance.",
 ]
 
-# Comprehensive knowledge base with improved matching
-KNOWLEDGE_BASE = [
-    {
-        "topic": "k'e",
-        "keywords": ["k'é", "k'e", "kinship", "family", "relative", "relationship", "relatives", "family ties", "family bond", "how are people related", "what is k'é", "what is k'e", "what is kinship"],
-        "answer": """
-            <div style="line-height: 1.6;">
-                <p><strong>🌿 What is K'é?</strong></p>
-                <p><strong>K'é</strong> is one of the most important concepts in Diné (Navajo) culture. It refers to the system of relationships, kinship, and responsibilities that connect all people, family, community, and even the natural world.</p>
-                
-                <p><strong>The Four Principles of K'é:</strong></p>
-                <ul>
-                    <li><strong>K'éí dóó áháyá (Kinship and Respect)</strong> - Honoring family and clan relationships</li>
-                    <li><strong>Áłah nílʼįįh (Cooperation)</strong> - Working together for the good of all</li>
-                    <li><strong>Hodzil (Strength through Unity)</strong> - Finding strength in community bonds</li>
-                    <li><strong>Áłah ałchʼįʼ nahwiildééh (Helping One Another)</strong> - Mutual support and care</li>
-                </ul>
-                
-                <p><strong>How K'é Works:</strong></p>
-                <ul>
-                    <li>When Diné people meet, they introduce themselves by sharing their clans</li>
-                    <li>This practice immediately establishes kinship connections</li>
-                    <li>K'é teaches that we are all related and have responsibilities to care for one another</li>
-                    <li>It extends beyond blood to include adopted family and community members</li>
-                </ul>
-                
-                <p><strong>Traditional Introduction Pattern:</strong></p>
-                <ul>
-                    <li>"My mother's clan is..." (your primary identity)</li>
-                    <li>"My father's clan is..." (your father's lineage)</li>
-                    <li>"My maternal grandfather's clan is..."</li>
-                    <li>"My paternal grandfather's clan is..."</li>
-                </ul>
-                
-                <p>K'é teaches respect, generosity, kindness, and responsibility in all relationships.</p>
-            </div>
-        """
-    },
-    {
-        "topic": "clan",
-        "keywords": ["clan", "clans", "dóoneʼé", "doonee", "clan system", "matrilineal", "how clans work", "clan structure", "original clans", "tell me about navajo clans", "navajo clan system", "what are navajo clans"],
-        "answer": """
-            <div style="line-height: 1.6;">
-                <p><strong>🏠 Navajo Clans (Dóoneʼé)</strong></p>
-                <p>The Navajo clan system is <strong>matrilineal</strong>, meaning clan membership passes through the mother. This system has existed for centuries and there are over 100 recognized Navajo clans today.</p>
-                
-                <p><strong>The Four Original Clans:</strong></p>
-                <ul>
-                    <li><strong>Kinyaa'áanii</strong> (Towering House Clan) - The first clan, created from the Towering House people</li>
-                    <li><strong>Honágháahnii</strong> (One-walks-around Clan) - Those who walk around the sacred mountains</li>
-                    <li><strong>Tódich'ii'nii</strong> (Bitter Water Clan) - People of the bitter water, associated with water sources</li>
-                    <li><strong>Hashtł'ishnii</strong> (Mud Clan) - People of the mud or earth</li>
-                </ul>
-                
-                <p><strong>Why Clans Matter:</strong></p>
-                <ul>
-                    <li><strong>Marriage Rules:</strong> You cannot marry within your own clan or your father's clan</li>
-                    <li><strong>Identity:</strong> Your clan establishes your identity and place in the community</li>
-                    <li><strong>Connection:</strong> Clans create kinship bonds across the entire Navajo Nation</li>
-                    <li><strong>Ancestry:</strong> Clans connect you to ancestors and future generations</li>
-                    <li><strong>Support Network:</strong> Your clan provides a network of family support wherever you go</li>
-                </ul>
-                
-                <p><strong>Clan Introduction:</strong><br>
-                When Diné people introduce themselves, they share four generations of clans:<br>
-                "Áshįįhí nishłį́" (I am Salt Clan)<br>
-                "Tódichʼiiʼnii bashishchiin" (Bitter Water Clan is born for me)<br>
-                "Kinyaaʼáanii dashicheii" (Towering House is my maternal grandfather)<br>
-                "Tábąąhá dashinalí" (Water's Edge is my paternal grandfather)</p>
-                
-                <p>This introduction immediately establishes family connections with others you meet.</p>
-            </div>
-        """
-    },
-    {
-        "topic": "hózhó",
-        "keywords": ["hózhó", "hozho", "harmony", "balance", "beauty", "wellness", "peace", "hozhooji", "walk in beauty", "beautiful", "what does hózhó mean", "what is hózhó", "what does hozho mean"],
-        "answer": """
-            <div style="line-height: 1.6;">
-                <p><strong>✨ Hózhó: Beauty, Harmony, and Balance</strong></p>
-                <p><strong>Hózhó</strong> is a foundational Diné concept that is central to Navajo philosophy and way of life. Often translated as "beauty," it encompasses so much more - harmony, balance, peace, wellness, order, and living in a state of spiritual beauty.</p>
-                
-                <p><strong>The Four Elements of Hózhó:</strong></p>
-                <ul>
-                    <li><strong>Nitsáhákees</strong> (Thinking) - Clear, positive thoughts and reflection</li>
-                    <li><strong>Nahat'á</strong> (Planning) - Living with purpose and intention</li>
-                    <li><strong>Iiná</strong> (Living) - Active, healthy, meaningful life</li>
-                    <li><strong>Sihasin</strong> (Assurance) - Peace, security, and confidence in the future</li>
-                </ul>
-                
-                <p><strong>Living in Hózhó means:</strong></p>
-                <ul>
-                    <li>Maintaining balance between mind, body, and spirit</li>
-                    <li>Living in harmony with nature, community, and oneself</li>
-                    <li>Walking in beauty on the path of life (Hózhóogo naashá)</li>
-                    <li>Finding wellness through relationships and purpose</li>
-                    <li>Making choices that create beauty in the world</li>
-                </ul>
-                
-                <p><strong>The Hózhóójí Ceremony:</strong><br>
-                The Hózhóójí ceremony is one of the most important Diné healing ceremonies. It is performed to restore balance and beauty when it has been disrupted by illness, misfortune, or disharmony. Through prayers, songs, and sand paintings, the ceremony guides a person back to a state of hózhó.</p>
-                
-                <p><strong>Everyday Hózhó:</strong><br>
-                Hózhó isn't just for ceremonies - it's a daily practice of making good choices, maintaining positive relationships, respecting nature, and striving for balance in all aspects of life.</p>
-            </div>
-        """
-    },
-    {
-        "topic": "weaving",
-        "keywords": ["weav", "weaving", "weaver", "blanket", "rug", "loom", "spider woman", "spider rock", "spider grandm", "weaving tradition", "navajo rug", "navajo blanket", "tell me about navajo weaving", "navajo weaving traditions"],
-        "answer": """
-            <div style="line-height: 1.6;">
-                <p><strong>🪶 Navajo Weaving (Diyin Dineʼé Binaaltsoos)</strong></p>
-                <p>Navajo weaving is a sacred tradition passed down through generations. According to Diné teachings, the first loom was given to the Navajo people by <strong>Spider Woman</strong> (Na'ashjé'ii Asdzáá), a holy being who taught the Diné how to weave beauty into the world.</p>
-                
-                <p><strong>The Story of Spider Woman:</strong><br>
-                Spider Woman taught the Navajo people to weave, saying that the first loom should be made of sky and earth, with weaving tools of sunlight, lightning, and rain. She taught that weaving is a prayer and a way to create beauty.</p>
-                
-                <p><strong>Traditional Weaving Elements:</strong></p>
-                <ul>
-                    <li><strong>Spirit Line (Chʼihóníʼįį)</strong> - A small thread from the center to the edge that lets the weaver's spirit escape from the weaving</li>
-                    <li><strong>Storm Pattern</strong> - Represents the four sacred mountains and directions, with zigzag lines representing lightning</li>
-                    <li><strong>Eye Dazzler</strong> - Bright, geometric patterns with contrasting colors</li>
-                    <li><strong>Chief's Blanket</strong> - Traditional striped patterns with cultural significance</li>
-                    <li><strong>Two Grey Hills</strong> - Natural, undyed wool in shades of brown, white, and gray</li>
-                    <li><strong>Ganado</strong> - Red background with geometric designs</li>
-                </ul>
-                
-                <p><strong>Colors and Meanings:</strong></p>
-                <ul>
-                    <li><strong>White (East)</strong> - Dawn, new beginnings, white shell</li>
-                    <li><strong>Blue (South)</strong> - Day, water, turquoise</li>
-                    <li><strong>Yellow (West)</strong> - Evening, harvest, abalone shell</li>
-                    <li><strong>Black (North)</strong> - Night, protection, jet</li>
-                </ul>
-                
-                <p>Traditional Navajo rugs and blankets are not just art - they tell stories, mark ceremonies, and connect weavers to their ancestors.</p>
-            </div>
-        """
-    },
-    {
-        "topic": "code talker",
-        "keywords": ["code talker", "code talkers", "wwii", "world war", "world war 2", "world war ii", "navajo code", "unbreakable code", "marine", "code", "encryption", "who were the navajo code talkers", "navajo code talkers"],
-        "answer": """
-            <div style="line-height: 1.6;">
-                <p><strong>📡 The Navajo Code Talkers</strong></p>
-                <p>The Navajo Code Talkers were Navajo Marines who developed and used an unbreakable code based on the Navajo language during World War II (1942-1945). Their code was never broken by the enemy and played a crucial role in Allied victory in the Pacific.</p>
-                
-                <p><strong>Why the Code Was Unbreakable:</strong></p>
-                <ul>
-                    <li><strong>Unwritten Language:</strong> Navajo was an unwritten language with no published grammar or dictionaries</li>
-                    <li><strong>Complex Grammar:</strong> The language's complex syntax and tonal qualities made it impossible for non-speakers to understand</li>
-                    <li><strong>Code Within a Code:</strong> Code Talkers created a two-layer code using Navajo words for military terms</li>
-                    <li><strong>Memorization:</strong> Code Talkers memorized everything - nothing was ever written down</li>
-                    <li><strong>Speed:</strong> They could encode, transmit, and decode a message in seconds</li>
-                </ul>
-                
-                <p><strong>How the Code Worked:</strong></p>
-                <ul>
-                    <li>Military terms were given Navajo names (e.g., "turtle" meant tank)</li>
-                    <li>Letters were represented by Navajo words (A = "wol-la-chee" meaning ant)</li>
-                    <li>The code used over 600 terms by war's end</li>
-                </ul>
-                
-                <p><strong>Legacy:</strong></p>
-                <ul>
-                    <li>Over 400 Navajo served as Code Talkers</li>
-                    <li>Their work was classified until 1968</li>
-                    <li>Received Congressional Gold Medals in 2001</li>
-                    <li>August 14 is National Navajo Code Talkers Day</li>
-                </ul>
-            </div>
-        """
-    },
-    {
-        "topic": "sacred mountains",
-        "keywords": ["sacred mountain", "sacred mountains", "mountains", "four mountains", "sisnaajiní", "tsoodził", "dookʼoʼoosłííd", "dibé nitsaa", "blanca peak", "mount taylor", "san francisco peaks", "hesperus", "what are the four sacred mountains", "four sacred mountains"],
-        "answer": """
-            <div style="line-height: 1.6;">
-                <p><strong>⛰️ The Four Sacred Mountains of the Diné</strong></p>
-                <p>The four sacred mountains were placed by the Holy People to mark the boundaries of Dinétah (traditional Navajo homeland).</p>
-                
-                <p><strong>The Four Mountains:</strong></p>
-                <ul>
-                    <li><strong>East - Sisnaajiní (Blanca Peak, Colorado)</strong> - White shell, dawn, new beginnings</li>
-                    <li><strong>South - Tsoodził (Mount Taylor, New Mexico)</strong> - Turquoise, day, water</li>
-                    <li><strong>West - Dookʼoʼoosłííd (San Francisco Peaks, Arizona)</strong> - Abalone shell, evening, harvest</li>
-                    <li><strong>North - Dibé Nitsaa (Hesperus Peak, Colorado)</strong> - Black jet, night, protection</li>
-                </ul>
-                
-                <p><strong>Significance:</strong></p>
-                <ul>
-                    <li>Each mountain is associated with a sacred stone, color, and direction</li>
-                    <li>The mountains were created as boundaries for Diné territory</li>
-                    <li>They hold spiritual significance in ceremonies and prayers</li>
-                    <li>The mountains are considered living beings that protect the Diné</li>
-                </ul>
-            </div>
-        """
-    },
-    {
-        "topic": "long walk",
-        "keywords": ["long walk", "bosque redondo", "fort sumner", "1864", "1868", "treaty of 1868", "navajo removal", "forced march", "hweeldi", "what was the long walk", "the long walk"],
-        "answer": """
-            <div style="line-height: 1.6;">
-                <p><strong>👣 The Long Walk (Hwéeldi)</strong></p>
-                <p>The Long Walk (1864-1868) was a tragic period when the U.S. Army forced the Diné people to walk over 300 miles to Bosque Redondo (Hwéeldi) in New Mexico.</p>
-                
-                <p><strong>What Happened:</strong></p>
-                <ul>
-                    <li>In 1864, approximately 8,000-10,000 Diné were forced to walk over 300 miles</li>
-                    <li>Hundreds died during the journey from harsh conditions</li>
-                    <li>At Bosque Redondo, they faced starvation, disease for four years</li>
-                    <li>Approximately 2,000 Diné died during this period</li>
-                </ul>
-                
-                <p><strong>The Treaty of 1868:</strong></p>
-                <ul>
-                    <li>In 1868, a treaty was signed establishing the Navajo Reservation</li>
-                    <li>The Diné were allowed to return to their homeland</li>
-                    <li>This treaty established the Navajo Nation as a sovereign nation</li>
-                </ul>
-                
-                <p>The Long Walk represents resilience, survival, and the strength of the Diné people.</p>
-            </div>
-        """
-    }
+# Optional: OpenAI
+try:
+    import openai
+    OPENAI_INSTALLED = True
+except ImportError:
+    OPENAI_INSTALLED = False
+    logger.info("OpenAI not installed - using local knowledge base only")
+
+OPENAI_AVAILABLE = False
+if OPENAI_INSTALLED:
+    try:
+        env_key = os.environ.get("OPENAI_API_KEY")
+        if env_key:
+            openai.api_key = env_key
+            OPENAI_AVAILABLE = True
+            logger.info("OpenAI initialized")
+    except:
+        pass
+
+# PDF Support Check
+try:
+    import PyPDF2
+    PDF_SUPPORT = True
+except ImportError:
+    PyPDF2 = None
+    PDF_SUPPORT = False
+
+# ----------------------------
+# Configure allowlist - ORIGINAL WORKING DOMAINS
+# ----------------------------
+ALLOWED_DOMAINS = [
+    # Official Navajo Nation / Diné Government
+    "navajo-nsn.gov",
+    "courts.navajo-nsn.gov",
+    "navajocourts.org",
+    "navajochapters.org",
+    "nnwo.org",
+    "navajopeople.org",
+    "navajo.org",
+    # Diné Education & Language
+    "dinecollege.edu",
+    "navajolanguageacademy.org",
+    "roughrock.k12.az.us",
+    "nau.edu",
+    "navajotech.edu",
+    "unm.edu",
+    # Diné Media
+    "navajotimes.com",
+    "navajocodetalkers.org",
+    "discovernavajo.com",
+    "navajohopiobserver.com",
+    "dineta.com",
+    # Indigenous Journalism
+    "ictnews.org",
+    "indiancountrytoday.com",
+    "nativeamericannews.net",
+    "ncai.org",
+    # Museums & Academic
+    "americanindian.si.edu",
+    "loc.gov",
+    "pbs.org",
+    "smithsonianmag.com",
+    # Academic Presses
+    "unmpress.com",
+    "upcolorado.com",
+    "uapress.arizona.edu",
+    "jstor.org",
+    # Cultural Sites
+    "navajoculture.org",
+    "traditionalnavajoteachings.org",
 ]
 
-def get_answer_from_knowledge(question):
-    """Match question to knowledge base with improved matching"""
-    if not question:
-        return None
-    
-    # Convert to lowercase for matching
-    q_lower = question.lower().strip()
-    
-    # Log what we're trying to match
-    logger.info(f"Looking for match for: '{q_lower}'")
-    
-    # Check each topic
-    for topic_data in KNOWLEDGE_BASE:
-        for keyword in topic_data["keywords"]:
-            if keyword in q_lower:
-                logger.info(f"✅ Matched '{q_lower}' to topic '{topic_data['topic']}' via keyword '{keyword}'")
-                return topic_data["answer"]
-    
-    logger.info(f"❌ No match found for '{q_lower}'")
-    return None
+# Domain trust scores
+DOMAIN_TRUST = {
+    "navajo-nsn.gov": 1.00,
+    "courts.navajo-nsn.gov": 1.00,
+    "navajocourts.org": 1.00,
+    "nnwo.org": 0.95,
+    "dinecollege.edu": 0.95,
+    "navajolanguageacademy.org": 0.92,
+    "navajotimes.com": 0.85,
+    "ictnews.org": 0.82,
+    "indiancountrytoday.com": 0.82,
+    "americanindian.si.edu": 0.80,
+    "loc.gov": 0.80,
+}
 
-def generate_answer(question):
-    """Generate answer from knowledge base"""
-    if not question:
-        return "Please enter a question."
-    
-    # First check knowledge base
-    answer = get_answer_from_knowledge(question)
-    if answer:
-        return answer
-    
-    # If no match, provide helpful response with suggestions
-    return f"""
-    <div style="line-height: 1.6;">
-        <p><strong>📖 Learning About Diné Culture</strong></p>
-        <p>I'm still learning about "{question}". Here are some topics I can help you with:</p>
-        <ul>
-            <li><strong>K'é</strong> - kinship, family, and relationships</li>
-            <li><strong>Clans (Dóoneʼé)</strong> - the Navajo clan system and matrilineal structure</li>
-            <li><strong>Hózhó</strong> - harmony, balance, and beauty</li>
-            <li><strong>Navajo Weaving</strong> - traditions, Spider Woman, and rug patterns</li>
-            <li><strong>Code Talkers</strong> - the Navajo Marines who created an unbreakable code</li>
-            <li><strong>Four Sacred Mountains</strong> - the mountains that mark Diné territory</li>
-            <li><strong>The Long Walk</strong> - the forced relocation of 1864-1868</li>
-        </ul>
-        
-        <p><strong>Try asking exactly:</strong></p>
-        <ul>
-            <li>"What is k'é?"</li>
-            <li>"Tell me about Navajo clans"</li>
-            <li>"What does hózhó mean?"</li>
-            <li>"Tell me about Navajo weaving"</li>
-            <li>"Who were the Code Talkers?"</li>
-            <li>"What are the four sacred mountains?"</li>
-            <li>"What was the Long Walk?"</li>
-        </ul>
-        
-        <hr>
-        <p><em>💡 Tip: Click one of the example buttons above for a guaranteed answer!</em></p>
-    </div>
-    """
+USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15"
 
-# HTML Template (same as before, but shortened for brevity)
+# Document search configuration
+DOCUMENTS_FOLDER = "/home/tony-cullen/dine_documents"
+
+def load_documents_from_folder():
+    """Load all text files from the documents folder."""
+    documents = []
+    if not os.path.exists(DOCUMENTS_FOLDER):
+        os.makedirs(DOCUMENTS_FOLDER)
+        return documents
+    
+    import glob
+    txt_files = glob.glob(os.path.join(DOCUMENTS_FOLDER, "*.txt"))
+    for file_path in txt_files:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            filename = os.path.basename(file_path)
+            is_story = 'story' in filename.lower() or 'hero' in filename.lower()
+            documents.append({
+                "url": f"local:{filename}",
+                "domain": "local-documents",
+                "tier": "document",
+                "trust": 1.00 if is_story else 0.98,
+                "label": filename,
+                "text": content
+            })
+        except Exception as e:
+            logger.error(f"Error loading {file_path}: {e}")
+    return documents
+
+def search_documents(question, documents):
+    """Search through local documents for relevant content."""
+    if not documents:
+        return []
+    
+    question_lower = question.lower()
+    keywords = [k for k in question_lower.split() if len(k) > 3 and k not in {'the','a','an','is','at','which','on','and','or','to','in','for'}]
+    
+    results = []
+    for doc in documents:
+        text_lower = doc['text'].lower()
+        score = sum(text_lower.count(k) for k in keywords)
+        
+        # Special boosts for specific topics
+        if "black god" in question_lower and ("black god" in text_lower or "haashch" in text_lower):
+            score += 50
+        if "stars" in question_lower and ("star" in text_lower or "constellation" in text_lower):
+            score += 30
+            
+        if score > 10:
+            doc_copy = doc.copy()
+            doc_copy['relevance'] = score
+            results.append(doc_copy)
+    
+    results.sort(key=lambda x: x.get('relevance', 0), reverse=True)
+    return results[:5]
+
+class TextExtractor(HTMLParser):
+    """Extract text content from HTML."""
+    def __init__(self):
+        super().__init__()
+        self._chunks = []
+        self._skip = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "noscript"):
+            self._skip = True
+        if tag in ("p", "br", "div", "li", "h1", "h2", "h3"):
+            self._chunks.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "noscript"):
+            self._skip = False
+        if tag in ("p", "div", "li"):
+            self._chunks.append("\n")
+
+    def handle_data(self, data):
+        if not self._skip:
+            text = data.strip()
+            if text:
+                self._chunks.append(text + " ")
+
+    def get_text(self):
+        text = "".join(self._chunks)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = re.sub(r"[ \t]{2,}", " ", text)
+        return text.strip()
+
+def fetch_url(url: str, timeout: int = 15) -> str:
+    """Fetch URL content."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            charset = resp.headers.get_content_charset() or "utf-8"
+            return resp.read().decode(charset, errors="ignore")
+    except Exception as e:
+        logger.error(f"Error fetching {url}: {e}")
+        return ""
+
+def domain_of(url: str) -> str:
+    try:
+        return urllib.parse.urlparse(url).netloc.lower().lstrip("www.")
+    except:
+        return ""
+
+def is_allowed(url: str) -> bool:
+    d = domain_of(url)
+    return any(d == ad or d.endswith("." + ad) for ad in ALLOWED_DOMAINS)
+
+def trust_for_url(url: str):
+    host = domain_of(url)
+    for d, score in DOMAIN_TRUST.items():
+        if host == d or host.endswith("." + d):
+            return score
+    return 0.50
+
+def ddg_search(query: str, max_results: int = 8) -> List[str]:
+    """Search DuckDuckGo and return list of result URLs."""
+    q = urllib.parse.quote_plus(query)
+    url = f"https://duckduckgo.com/html/?q={q}"
+    html = fetch_url(url)
+    
+    if not html:
+        return []
+    
+    links = re.findall(r'class="result__a"[^>]*href="([^"]+)"', html)
+    
+    cleaned = []
+    for link in links:
+        if "duckduckgo.com/l/?" in link:
+            parsed = urllib.parse.urlparse(link)
+            params = urllib.parse.parse_qs(parsed.query)
+            if "uddg" in params:
+                link = urllib.parse.unquote(params["uddg"][0])
+        cleaned.append(link)
+
+    seen = set()
+    results = []
+    for u in cleaned:
+        if u not in seen:
+            seen.add(u)
+            results.append(u)
+        if len(results) >= max_results:
+            break
+    return results
+
+def gather_sources(question: str, max_pages: int = 6) -> List[Dict[str, Any]]:
+    """Gather sources from local documents AND allowed domains."""
+    sources = []
+    
+    # Search local documents
+    documents = load_documents_from_folder()
+    doc_sources = search_documents(question, documents)
+    if doc_sources:
+        sources.extend(doc_sources)
+    
+    # Search the web
+    clean_q = question.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'").strip()
+    topic = clean_q.lower()
+    
+    # Build search query based on question type
+    kinship_terms = ["grandmother", "grandfather", "mother", "father", "aunt", "uncle", "sister", "brother", "clan", "family", "relative"]
+    story_terms = ["coyote", "black god", "holy people", "ceremony", "creation", "monster slayer", "stars", "sky", "constellation"]
+    
+    if any(word in topic for word in kinship_terms):
+        search_query = f"{clean_q} Diné Navajo kinship term family relationship"
+    elif any(word in topic for word in story_terms):
+        search_query = f"{clean_q} Diné Navajo teaching story holy people meaning"
+    else:
+        search_query = f"{clean_q} Navajo Diné culture"
+    
+    urls = ddg_search(search_query, max_results=12)
+    allowed_urls = [u for u in urls if is_allowed(u)]
+    allowed_urls = allowed_urls[:max_pages]
+    
+    for u in allowed_urls:
+        trust = trust_for_url(u)
+        try:
+            html = fetch_url(u, timeout=15)
+            if not html:
+                continue
+            
+            parser = TextExtractor()
+            parser.feed(html)
+            full_text = parser.get_text()
+            
+            # Extract relevant paragraphs
+            paragraphs = [p.strip() for p in full_text.split("\n") if p.strip()]
+            priority_terms = ["navajo", "diné", "dine", "black god", "haashch", "star", "creation", "holy people"]
+            
+            relevant_parts = []
+            for p in paragraphs:
+                p_low = p.lower()
+                if any(term in p_low for term in priority_terms):
+                    relevant_parts.append(p)
+            
+            text = "\n\n".join(relevant_parts)[:12000] if relevant_parts else full_text[:12000]
+            
+            sources.append({
+                "url": u,
+                "domain": domain_of(u),
+                "trust": trust,
+                "text": text,
+            })
+        except Exception as e:
+            logger.error(f"Error processing {u}: {e}")
+            continue
+    
+    sources.sort(key=lambda s: s.get("trust", 0), reverse=True)
+    return sources
+
+def generate_fallback_answer(question: str, sources: List[Dict[str, Any]]) -> str:
+    """Generate answer from sources (original working function)."""
+    if not sources:
+        return "I couldn't find any relevant sources. Please try rephrasing your question."
+    
+    # Get the best source
+    primary = sources[0]
+    text = primary.get('text', '')
+    
+    if not text:
+        return "No content available in the sources found."
+    
+    # Split into paragraphs
+    paragraphs = [p for p in text.split('\n\n') if len(p) > 100]
+    
+    # Find relevant paragraphs based on question keywords
+    keywords = [w for w in question.lower().split() if len(w) > 3 and w not in {'the','what','how','why','does','tell'}]
+    
+    scored = []
+    for p in paragraphs:
+        score = sum(p.lower().count(k) for k in keywords)
+        if "black god" in question.lower() and ("black god" in p.lower() or "haashch" in p.lower()):
+            score += 50
+        if "star" in question.lower() and ("star" in p.lower() or "constellation" in p.lower()):
+            score += 30
+        if score > 0:
+            scored.append((score, p))
+    
+    scored.sort(reverse=True)
+    
+    # Build answer
+    answer_parts = []
+    answer_parts.append('<div style="line-height: 1.6;">')
+    
+    if scored:
+        for i in range(min(3, len(scored))):
+            answer_parts.append(f'<p>{scored[i][1][:800]}...</p>')
+            if i < min(2, len(scored)-1):
+                answer_parts.append('<hr>')
+    else:
+        # Take first few substantial paragraphs
+        for p in paragraphs[:2]:
+            answer_parts.append(f'<p>{p[:500]}...</p>')
+    
+    # Add sources
+    answer_parts.append('<hr>')
+    answer_parts.append('<p><strong>📚 Sources:</strong></p>')
+    answer_parts.append('<ul>')
+    for i, s in enumerate(sources[:3], 1):
+        url = s.get('url', 'Unknown')
+        trust_score = s.get('trust', 0.5)
+        trust_badge = ''
+        if trust_score >= 0.95:
+            trust_badge = '<span style="background: #2ecc71; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">✓ Verified</span>'
+        elif trust_score >= 0.80:
+            trust_badge = '<span style="background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">📚 Trusted</span>'
+        display_url = url.replace('local:', '📄 ') if url.startswith('local:') else url
+        answer_parts.append(f'<li style="margin-bottom: 8px;">[{i}] {display_url} {trust_badge}</li>')
+    answer_parts.append('</ul>')
+    answer_parts.append('</div>')
+    
+    return '\n'.join(answer_parts)
+
+# HTML Template with loading spinner and example buttons
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -514,14 +587,11 @@ HTML_TEMPLATE = """
             border-radius: 12px 12px 0 0;
             font-weight: bold;
             font-size: 18px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
         }
         
         .answer-header:before {
             content: "📖";
-            font-size: 20px;
+            margin-right: 10px;
         }
         
         .answer {
@@ -537,13 +607,6 @@ HTML_TEMPLATE = """
         .answer p { margin-bottom: 12px; }
         .answer ul, .answer ol { margin-left: 25px; margin-bottom: 12px; }
         .answer li { margin-bottom: 6px; }
-        
-        @keyframes highlight {
-            0% { background: #fff3cd; border-left-color: #ffc107; }
-            100% { background: #f9f9f9; border-left-color: #2c5f2d; }
-        }
-        
-        .answer-highlight { animation: highlight 2s ease-out; }
         
         .fact-box {
             background: #fff3e0;
@@ -567,7 +630,6 @@ HTML_TEMPLATE = """
         @media (max-width: 600px) {
             .content { padding: 20px; }
             .example-btn { font-size: 11px; padding: 6px 12px; }
-            .answer-header { font-size: 16px; padding: 10px 15px; }
         }
     </style>
 </head>
@@ -575,7 +637,7 @@ HTML_TEMPLATE = """
     <div class="container">
         <div class="header">
             <h1>🌾 Diné Cultural Learning Bot</h1>
-            <p>Ask your own questions about Navajo traditions, language, and values</p>
+            <p>Ask questions about Navajo traditions, language, and values</p>
         </div>
         
         <div class="content">
@@ -589,7 +651,7 @@ HTML_TEMPLATE = """
                 <form method="POST" id="questionForm">
                     <textarea 
                         name="question" 
-                        placeholder="Example: What is k'é? How do Navajo clans work? Tell me about the Code Talkers..." 
+                        placeholder="Example: Who is Black God? How were the stars created? What is k'é? Tell me about the Long Walk..." 
                         id="questionInput"
                         rows="4"
                     >{{ question }}</textarea>
@@ -597,7 +659,7 @@ HTML_TEMPLATE = """
                         <button type="submit" class="submit-btn" id="submitBtn">🔍 Ask Question</button>
                         <div id="loadingIndicator" style="display: none;" class="loading-container">
                             <span class="loading-spinner"></span>
-                            <span class="searching-message">Searching for answer...</span>
+                            <span class="searching-message">Searching Diné sources...</span>
                         </div>
                     </div>
                 </form>
@@ -610,13 +672,13 @@ HTML_TEMPLATE = """
             <div class="suggestions-section">
                 <div class="suggestions-title">💡 POPULAR QUESTIONS TO EXPLORE</div>
                 <div class="example-buttons">
+                    <button class="example-btn" data-question="Who is Black God?">⭐ Who is Black God?</button>
+                    <button class="example-btn" data-question="How were the stars created?">✨ How were the stars created?</button>
                     <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
                     <button class="example-btn" data-question="Tell me about Navajo clans">👨‍👩‍👧‍👦 Tell me about Navajo clans</button>
                     <button class="example-btn" data-question="What does hózhó mean?">☯️ What does hózhó mean?</button>
-                    <button class="example-btn" data-question="Tell me about Navajo weaving">🪶 Tell me about Navajo weaving</button>
+                    <button class="example-btn" data-question="Tell me about the Long Walk">👣 Tell me about the Long Walk</button>
                     <button class="example-btn" data-question="Who were the Navajo Code Talkers?">📡 Who were the Navajo Code Talkers?</button>
-                    <button class="example-btn" data-question="What are the four sacred mountains?">⛰️ What are the four sacred mountains?</button>
-                    <button class="example-btn" data-question="What was the Long Walk?">👣 What was the Long Walk?</button>
                 </div>
             </div>
             
@@ -665,7 +727,6 @@ HTML_TEMPLATE = """
             const submitBtn = document.getElementById('submitBtn');
             const loadingIndicator = document.getElementById('loadingIndicator');
             const answerSection = document.getElementById('answerSection');
-            const answerContent = document.getElementById('answerContent');
             
             if (submitBtn && loadingIndicator) {
                 submitBtn.disabled = false;
@@ -673,10 +734,8 @@ HTML_TEMPLATE = """
                 loadingIndicator.style.display = 'none';
             }
             
-            if (answerSection && answerContent) {
+            if (answerSection) {
                 answerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                answerContent.classList.add('answer-highlight');
-                setTimeout(() => answerContent.classList.remove('answer-highlight'), 2000);
             }
         });
     </script>
@@ -700,7 +759,7 @@ def home():
         
         if question:
             try:
-                # Seasonal check for animal questions
+                # Seasonal check for animal questions (winter months)
                 current_month = datetime.now().month
                 animal_keywords = ["bear", "coyote", "wolf", "snake", "owl", "eagle"]
                 
@@ -713,8 +772,23 @@ def home():
                         </div>
                     """
                 else:
-                    answer = generate_answer(question)
+                    # Gather sources and generate answer
+                    sources = []
+                    sources_result = []
                     
+                    def gather():
+                        sources_result.append(gather_sources(question))
+                    
+                    thread = threading.Thread(target=gather)
+                    thread.start()
+                    thread.join(timeout=25)
+                    
+                    if thread.is_alive():
+                        answer = "Search is taking longer than expected. Please try a more specific question."
+                    else:
+                        sources = sources_result[0] if sources_result else []
+                        answer = generate_fallback_answer(question, sources)
+                        
             except Exception as e:
                 logger.error(f"Error: {e}")
                 answer = "I encountered an issue. Please try asking your question in a different way."
