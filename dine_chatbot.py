@@ -335,64 +335,106 @@ def gather_sources(question: str, max_pages: int = 6) -> List[Dict[str, Any]]:
     return sources
 
 def generate_fallback_answer(question: str, sources: List[Dict[str, Any]]) -> str:
-    """Generate answer from sources (original working function)."""
+    """Generate formatted answer from sources."""
     if not sources:
-        return "I couldn't find any relevant sources. Please try rephrasing your question."
+        return """
+        <div style="line-height: 1.6;">
+            <p><strong>📖 I couldn't find any relevant sources.</strong></p>
+            <p>Please try rephrasing your question or ask about topics like:</p>
+            <ul>
+                <li>Who is Black God?</li>
+                <li>How were the stars created?</li>
+                <li>What is k'é?</li>
+                <li>Tell me about Navajo clans</li>
+                <li>What is the Long Walk?</li>
+            </ul>
+        </div>
+        """
     
     # Get the best source
     primary = sources[0]
     text = primary.get('text', '')
     
-    if not text:
-        return "No content available in the sources found."
+    if not text or len(text) < 50:
+        return "I found a source but couldn't extract enough text. Please try a different question."
     
-    # Split into paragraphs
-    paragraphs = [p for p in text.split('\n\n') if len(p) > 100]
+    # Clean up the text
+    text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
+    text = text.strip()
     
-    # Find relevant paragraphs based on question keywords
-    keywords = [w for w in question.lower().split() if len(w) > 3 and w not in {'the','what','how','why','does','tell'}]
+    # Split into sentences for better formatting
+    sentences = re.split(r'(?<=[.!?])\s+', text)
     
-    scored = []
-    for p in paragraphs:
-        score = sum(p.lower().count(k) for k in keywords)
-        if "black god" in question.lower() and ("black god" in p.lower() or "haashch" in p.lower()):
-            score += 50
-        if "star" in question.lower() and ("star" in p.lower() or "constellation" in p.lower()):
-            score += 30
+    # Find relevant sentences based on question
+    q_lower = question.lower()
+    keywords = [w for w in q_lower.split() if len(w) > 3 and w not in {'the','what','how','why','does','tell','about'}]
+    
+    # Special keyword boosts
+    if "star" in q_lower:
+        keywords.extend(["star", "stars", "constellation", "sky", "heavens", "creation"])
+    if "black god" in q_lower:
+        keywords.extend(["black god", "haashch", "fire god", "darkness"])
+    
+    # Score each sentence
+    scored_sentences = []
+    for sentence in sentences:
+        if len(sentence) < 30:
+            continue
+        s_lower = sentence.lower()
+        score = sum(s_lower.count(k) for k in keywords)
         if score > 0:
-            scored.append((score, p))
+            scored_sentences.append((score, sentence))
     
-    scored.sort(reverse=True)
+    scored_sentences.sort(reverse=True)
     
-    # Build answer
+    # Build a clean answer
     answer_parts = []
     answer_parts.append('<div style="line-height: 1.6;">')
     
-    if scored:
-        for i in range(min(3, len(scored))):
-            answer_parts.append(f'<p>{scored[i][1][:800]}...</p>')
-            if i < min(2, len(scored)-1):
-                answer_parts.append('<hr>')
+    # Add introduction based on question
+    if "star" in q_lower:
+        answer_parts.append('<p><strong>✨ The Diné Creation Story of the Stars:</strong></p>')
+        answer_parts.append('<p>According to Diné (Navajo) tradition, the stars were placed in the sky by the Holy People during the creation of the Fifth World. Below is an excerpt from traditional teachings:</p>')
+    elif "black god" in q_lower:
+        answer_parts.append('<p><strong>⭐ Who is Black God (Haashchʼééshzhiní)?</strong></p>')
+        answer_parts.append('<p>Black God is a powerful Holy Person in Diné cosmology who played a crucial role in placing the stars in the sky. According to tradition:</p>')
     else:
-        # Take first few substantial paragraphs
-        for p in paragraphs[:2]:
-            answer_parts.append(f'<p>{p[:500]}...</p>')
+        answer_parts.append(f'<p><strong>📖 Answer about: {question}</strong></p>')
     
-    # Add sources
     answer_parts.append('<hr>')
-    answer_parts.append('<p><strong>📚 Sources:</strong></p>')
-    answer_parts.append('<ul>')
-    for i, s in enumerate(sources[:3], 1):
-        url = s.get('url', 'Unknown')
-        trust_score = s.get('trust', 0.5)
-        trust_badge = ''
-        if trust_score >= 0.95:
-            trust_badge = '<span style="background: #2ecc71; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">✓ Verified</span>'
-        elif trust_score >= 0.80:
-            trust_badge = '<span style="background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">📚 Trusted</span>'
-        display_url = url.replace('local:', '📄 ') if url.startswith('local:') else url
-        answer_parts.append(f'<li style="margin-bottom: 8px;">[{i}] {display_url} {trust_badge}</li>')
-    answer_parts.append('</ul>')
+    
+    # Add the best relevant sentences with context
+    if scored_sentences:
+        # Take top 3-5 relevant sentences
+        for i in range(min(5, len(scored_sentences))):
+            sentence = scored_sentences[i][1].strip()
+            # Clean up the sentence
+            sentence = re.sub(r'\.\.\.+', '...', sentence)
+            answer_parts.append(f'<p>{sentence}</p>')
+    else:
+        # Fallback to first few substantial sentences
+        count = 0
+        for sent in sentences:
+            if len(sent) > 60 and count < 4:
+                answer_parts.append(f'<p>{sent.strip()}</p>')
+                count += 1
+    
+    answer_parts.append('<hr>')
+    
+    # Add source information
+    source_url = primary.get('url', 'Unknown')
+    trust_score = primary.get('trust', 0.5)
+    trust_badge = ''
+    if trust_score >= 0.95:
+        trust_badge = '<span style="background: #2ecc71; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✓ Verified Source</span>'
+    elif trust_score >= 0.80:
+        trust_badge = '<span style="background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📚 Trusted Source</span>'
+    
+    answer_parts.append(f'<p><strong>Source:</strong> <a href="{source_url}" target="_blank">{source_url}</a> {trust_badge}</p>')
+    
+    # Add cultural note
+    answer_parts.append('<p style="font-size: 12px; color: #666; margin-top: 15px;"><em>Note: Traditional Diné stories are passed down orally through generations. This excerpt comes from published educational sources. For deeper understanding, consult with Diné cultural knowledge holders.</em></p>')
+    
     answer_parts.append('</div>')
     
     return '\n'.join(answer_parts)
