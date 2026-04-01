@@ -7,9 +7,8 @@ import threading
 import logging
 import urllib.parse
 import urllib.request
-import json
 from html.parser import HTMLParser
-from datetime import datetime, date
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from flask import Flask, request, render_template_string
 
@@ -34,223 +33,287 @@ DID_YOU_KNOW_FACTS = [
     "Traditional Navajo names are often given in ceremonies and hold deep spiritual significance.",
 ]
 
-# Knowledge base for common questions
+# Comprehensive knowledge base with better matching
 KNOWLEDGE_BASE = {
-    "k'é": """
-        <div style="line-height: 1.6;">
-            <p><strong>🌿 What is K'é?</strong></p>
-            <p><strong>K'é</strong> is one of the most important concepts in Diné culture. It refers to the system of relationships, kinship, and responsibilities that connect all people, family, and community.</p>
-            
-            <p><strong>Key Principles of K'é:</strong></p>
-            <ul>
-                <li><strong>K'éí dóó áháyá (Kinship and Respect)</strong> - Honoring family and clan relationships</li>
-                <li><strong>Áłah nílʼįįh (Cooperation)</strong> - Working together for the good of all</li>
-                <li><strong>Hodzil (Strength through Unity)</strong> - Finding strength in community bonds</li>
-            </ul>
-            
-            <p>When Diné people meet, they introduce themselves by sharing their clans. This practice immediately establishes kinship connections. A traditional introduction follows this pattern:</p>
-            <ul>
-                <li>"My mother's clan is..." (your primary identity)</li>
-                <li>"My father's clan is..." (your father's lineage)</li>
-                <li>"My maternal grandfather's clan is..."</li>
-                <li>"My paternal grandfather's clan is..."</li>
-            </ul>
-            
-            <p>K'é teaches that we are all related and have responsibilities to care for one another, showing respect, generosity, and kindness in all relationships.</p>
-        </div>
-    """,
+    "k'e": {
+        "keywords": ["k'é", "k'e", "kinship", "family", "relative", "relationship", "relatives", "clan", "family ties", "family bond", "how are people related"],
+        "answer": """
+            <div style="line-height: 1.6;">
+                <p><strong>🌿 What is K'é?</strong></p>
+                <p><strong>K'é</strong> is one of the most important concepts in Diné (Navajo) culture. It refers to the system of relationships, kinship, and responsibilities that connect all people, family, community, and even the natural world.</p>
+                
+                <p><strong>The Four Principles of K'é:</strong></p>
+                <ul>
+                    <li><strong>K'éí dóó áháyá (Kinship and Respect)</strong> - Honoring family and clan relationships</li>
+                    <li><strong>Áłah nílʼįįh (Cooperation)</strong> - Working together for the good of all</li>
+                    <li><strong>Hodzil (Strength through Unity)</strong> - Finding strength in community bonds</li>
+                    <li><strong>Áłah ałchʼįʼ nahwiildééh (Helping One Another)</strong> - Mutual support and care</li>
+                </ul>
+                
+                <p><strong>How K'é Works:</strong></p>
+                <ul>
+                    <li>When Diné people meet, they introduce themselves by sharing their clans</li>
+                    <li>This practice immediately establishes kinship connections</li>
+                    <li>K'é teaches that we are all related and have responsibilities to care for one another</li>
+                    <li>It extends beyond blood to include adopted family and community members</li>
+                </ul>
+                
+                <p><strong>Traditional Introduction Pattern:</strong></p>
+                <ul>
+                    <li>"My mother's clan is..." (your primary identity)</li>
+                    <li>"My father's clan is..." (your father's lineage)</li>
+                    <li>"My maternal grandfather's clan is..."</li>
+                    <li>"My paternal grandfather's clan is..."</li>
+                </ul>
+                
+                <p>K'é teaches respect, generosity, kindness, and responsibility in all relationships.</p>
+            </div>
+        """
+    },
     
-    "clan": """
-        <div style="line-height: 1.6;">
-            <p><strong>🏠 Navajo Clans (Dóoneʼé)</strong></p>
-            <p>The Navajo clan system is matrilineal, meaning clan membership passes through the mother. There are over 100 recognized Navajo clans today.</p>
-            
-            <p><strong>The Four Original Clans:</strong></p>
-            <ul>
-                <li><strong>Kinyaa'áanii</strong> (Towering House Clan)</li>
-                <li><strong>Honágháahnii</strong> (One-walks-around Clan)</li>
-                <li><strong>Tódich'ii'nii</strong> (Bitter Water Clan)</li>
-                <li><strong>Hashtł'ishnii</strong> (Mud Clan)</li>
-            </ul>
-            
-            <p><strong>Why Clans Matter:</strong></p>
-            <ul>
-                <li>Clans determine who you can marry (you cannot marry within your own clan)</li>
-                <li>Clans establish kinship bonds across the Navajo Nation</li>
-                <li>Clans connect you to ancestors and future generations</li>
-                <li>Clans create an extended family network of support</li>
-            </ul>
-            
-            <p>When introducing yourself, you share four generations of clans, creating an immediate family connection with others you meet.</p>
-        </div>
-    """,
+    "clan": {
+        "keywords": ["clan", "clans", "dóoneʼé", "doonee", "clan system", "matrilineal", "how clans work", "clan structure", "original clans"],
+        "answer": """
+            <div style="line-height: 1.6;">
+                <p><strong>🏠 Navajo Clans (Dóoneʼé)</strong></p>
+                <p>The Navajo clan system is <strong>matrilineal</strong>, meaning clan membership passes through the mother. This system has existed for centuries and there are over 100 recognized Navajo clans today.</p>
+                
+                <p><strong>The Four Original Clans:</strong></p>
+                <ul>
+                    <li><strong>Kinyaa'áanii</strong> (Towering House Clan) - The first clan, created from the Towering House people</li>
+                    <li><strong>Honágháahnii</strong> (One-walks-around Clan) - Those who walk around the sacred mountains</li>
+                    <li><strong>Tódich'ii'nii</strong> (Bitter Water Clan) - People of the bitter water, associated with water sources</li>
+                    <li><strong>Hashtł'ishnii</strong> (Mud Clan) - People of the mud or earth</li>
+                </ul>
+                
+                <p><strong>Why Clans Matter:</strong></p>
+                <ul>
+                    <li><strong>Marriage Rules:</strong> You cannot marry within your own clan or your father's clan</li>
+                    <li><strong>Identity:</strong> Your clan establishes your identity and place in the community</li>
+                    <li><strong>Connection:</strong> Clans create kinship bonds across the entire Navajo Nation</li>
+                    <li><strong>Ancestry:</strong> Clans connect you to ancestors and future generations</li>
+                    <li><strong>Support Network:</strong> Your clan provides a network of family support wherever you go</li>
+                </ul>
+                
+                <p><strong>Clan Introduction:</strong><br>
+                When Diné people introduce themselves, they share four generations of clans:<br>
+                "Áshįįhí nishłį́" (I am Salt Clan)<br>
+                "Tódichʼiiʼnii bashishchiin" (Bitter Water Clan is born for me)<br>
+                "Kinyaaʼáanii dashicheii" (Towering House is my maternal grandfather)<br>
+                "Tábąąhá dashinalí" (Water's Edge is my paternal grandfather)</p>
+                
+                <p>This introduction immediately establishes family connections with others you meet.</p>
+            </div>
+        """
+    },
     
-    "hózhó": """
-        <div style="line-height: 1.6;">
-            <p><strong>✨ Hózhó: Beauty, Harmony, and Balance</strong></p>
-            <p><strong>Hózhó</strong> is a foundational Diné concept often translated as "beauty," but it encompasses so much more. Hózhó represents living in a state of harmony, balance, peace, wellness, and spiritual beauty.</p>
-            
-            <p><strong>The Elements of Hózhó:</strong></p>
-            <ul>
-                <li><strong>Nitsáhákees</strong> (Thinking) - Clear, positive thoughts</li>
-                <li><strong>Nahat'á</strong> (Planning) - Living with purpose</li>
-                <li><strong>Iiná</strong> (Living) - Active, healthy life</li>
-                <li><strong>Sihasin</strong> (Assurance) - Peace and security</li>
-            </ul>
-            
-            <p><strong>Living in Hózhó means:</strong></p>
-            <ul>
-                <li>Maintaining balance in mind, body, and spirit</li>
-                <li>Living in harmony with nature and community</li>
-                <li>Walking in beauty on the path of life</li>
-                <li>Finding wellness through relationships and purpose</li>
-            </ul>
-            
-            <p>The Hózhóójí ceremony is one of the most important Diné healing ceremonies, restoring balance and beauty when it has been disrupted.</p>
-        </div>
-    """,
+    "hózhó": {
+        "keywords": ["hózhó", "hozho", "harmony", "balance", "beauty", "wellness", "peace", "hozhooji", "walk in beauty", "beautiful"],
+        "answer": """
+            <div style="line-height: 1.6;">
+                <p><strong>✨ Hózhó: Beauty, Harmony, and Balance</strong></p>
+                <p><strong>Hózhó</strong> is a foundational Diné concept that is central to Navajo philosophy and way of life. Often translated as "beauty," it encompasses so much more - harmony, balance, peace, wellness, order, and living in a state of spiritual beauty.</p>
+                
+                <p><strong>The Four Elements of Hózhó:</strong></p>
+                <ul>
+                    <li><strong>Nitsáhákees</strong> (Thinking) - Clear, positive thoughts and reflection</li>
+                    <li><strong>Nahat'á</strong> (Planning) - Living with purpose and intention</li>
+                    <li><strong>Iiná</strong> (Living) - Active, healthy, meaningful life</li>
+                    <li><strong>Sihasin</strong> (Assurance) - Peace, security, and confidence in the future</li>
+                </ul>
+                
+                <p><strong>Living in Hózhó means:</strong></p>
+                <ul>
+                    <li>Maintaining balance between mind, body, and spirit</li>
+                    <li>Living in harmony with nature, community, and oneself</li>
+                    <li>Walking in beauty on the path of life (Hózhóogo naashá)</li>
+                    <li>Finding wellness through relationships and purpose</li>
+                    <li>Making choices that create beauty in the world</li>
+                </ul>
+                
+                <p><strong>The Hózhóójí Ceremony:</strong><br>
+                The Hózhóójí ceremony is one of the most important Diné healing ceremonies. It is performed to restore balance and beauty when it has been disrupted by illness, misfortune, or disharmony. Through prayers, songs, and sand paintings, the ceremony guides a person back to a state of hózhó.</p>
+                
+                <p><strong>Everyday Hózhó:</strong><br>
+                Hózhó isn't just for ceremonies - it's a daily practice of making good choices, maintaining positive relationships, respecting nature, and striving for balance in all aspects of life.</p>
+            </div>
+        """
+    },
     
-    "weaving": """
-        <div style="line-height: 1.6;">
-            <p><strong>🪶 Navajo Weaving (Diyin Dineʼé Binaaltsoos)</strong></p>
-            <p>Navajo weaving is a sacred tradition taught to the Diné by Spider Woman, a holy being. The first loom was said to be made of sky and earth, with weaving tools of sunlight and lightning.</p>
-            
-            <p><strong>Traditional Weaving Elements:</strong></p>
-            <ul>
-                <li><strong>Spirit Line (Chʼihóníʼįį)</strong> - A small thread from the center to the edge that lets the weaver's spirit escape from the weaving</li>
-                <li><strong>Storm Pattern</strong> - Represents the four sacred mountains and directions</li>
-                <li><strong>Eye Dazzler</strong> - Bright, geometric patterns that catch the light</li>
-                <li><strong>Chief's Blanket</strong> - Traditional striped patterns with cultural significance</li>
-            </ul>
-            
-            <p><strong>Colors and Meanings:</strong></p>
-            <ul>
-                <li>White (East) - Dawn, new beginnings</li>
-                <li>Blue (South) - Day, water</li>
-                <li>Yellow (West) - Evening, harvest</li>
-                <li>Black (North) - Night, protection</li>
-            </ul>
-            
-            <p>Traditional Navajo rugs and blankets are not just art - they tell stories, mark ceremonies, and connect weavers to their ancestors.</p>
-        </div>
-    """,
+    "weaving": {
+        "keywords": ["weav", "weaving", "weaver", "blanket", "rug", "loom", "spider woman", "spider rock", "spider grandm", "weaving tradition", "navajo rug", "navajo blanket"],
+        "answer": """
+            <div style="line-height: 1.6;">
+                <p><strong>🪶 Navajo Weaving (Diyin Dineʼé Binaaltsoos)</strong></p>
+                <p>Navajo weaving is a sacred tradition passed down through generations. According to Diné teachings, the first loom was given to the Navajo people by <strong>Spider Woman</strong> (Na'ashjé'ii Asdzáá), a holy being who taught the Diné how to weave beauty into the world.</p>
+                
+                <p><strong>The Story of Spider Woman:</strong><br>
+                Spider Woman taught the Navajo people to weave, saying that the first loom should be made of sky and earth, with weaving tools of sunlight, lightning, and rain. She taught that weaving is a prayer and a way to create beauty.</p>
+                
+                <p><strong>Traditional Weaving Elements:</strong></p>
+                <ul>
+                    <li><strong>Spirit Line (Chʼihóníʼįį)</strong> - A small thread from the center to the edge that lets the weaver's spirit escape from the weaving</li>
+                    <li><strong>Storm Pattern</strong> - Represents the four sacred mountains and directions, with zigzag lines representing lightning</li>
+                    <li><strong>Eye Dazzler</strong> - Bright, geometric patterns with contrasting colors</li>
+                    <li><strong>Chief's Blanket</strong> - Traditional striped patterns with cultural significance</li>
+                    <li><strong>Two Grey Hills</strong> - Natural, undyed wool in shades of brown, white, and gray</li>
+                    <li><strong>Ganado</strong> - Red background with geometric designs</li>
+                </ul>
+                
+                <p><strong>Colors and Meanings:</strong></p>
+                <ul>
+                    <li><strong>White (East)</strong> - Dawn, new beginnings, white shell</li>
+                    <li><strong>Blue (South)</strong> - Day, water, turquoise</li>
+                    <li><strong>Yellow (West)</strong> - Evening, harvest, abalone shell</li>
+                    <li><strong>Black (North)</strong> - Night, protection, jet</li>
+                </ul>
+                
+                <p>Traditional Navajo rugs and blankets are not just art - they tell stories, mark ceremonies, and connect weavers to their ancestors.</p>
+            </div>
+        """
+    },
     
-    "code talker": """
-        <div style="line-height: 1.6;">
-            <p><strong>📡 Navajo Code Talkers</strong></p>
-            <p>The Navajo Code Talkers were Navajo Marines who developed an unbreakable code based on the Navajo language during World War II. The Japanese were never able to break this code.</p>
-            
-            <p><strong>Why the Code Was Unbreakable:</strong></p>
-            <ul>
-                <li>Navajo was an unwritten language with no published grammar or dictionaries</li>
-                <li>The code used Navajo words for military terms (e.g., "turtle" meant tank)</li>
-                <li>Code Talkers memorized everything - nothing was written down</li>
-                <li>The code was never broken by enemy forces</li>
-            </ul>
-            
-            <p><strong>Legacy:</strong></p>
-            <ul>
-                <li>Over 400 Navajo served as Code Talkers</li>
-                <li>Their work was classified until 1968</li>
-                <li>They received Congressional Gold Medals in 2001</li>
-                <li>Their service helped win WWII and preserved the Navajo language</li>
-            </ul>
-            
-            <p>The Code Talkers are heroes who used their sacred language to protect their country and their people.</p>
-        </div>
-    """,
+    "code talker": {
+        "keywords": ["code talker", "code talkers", "wwii", "world war", "world war 2", "world war ii", "navajo code", "unbreakable code", "marine", "code", "encryption"],
+        "answer": """
+            <div style="line-height: 1.6;">
+                <p><strong>📡 The Navajo Code Talkers</strong></p>
+                <p>The Navajo Code Talkers were Navajo Marines who developed and used an unbreakable code based on the Navajo language during World War II (1942-1945). Their code was never broken by the enemy and played a crucial role in Allied victory in the Pacific.</p>
+                
+                <p><strong>Why the Code Was Unbreakable:</strong></p>
+                <ul>
+                    <li><strong>Unwritten Language:</strong> Navajo was an unwritten language with no published grammar or dictionaries</li>
+                    <li><strong>Complex Grammar:</strong> The language's complex syntax and tonal qualities made it impossible for non-speakers to understand</li>
+                    <li><strong>Code Within a Code:</strong> Code Talkers created a two-layer code using Navajo words for military terms</li>
+                    <li><strong>Memorization:</strong> Code Talkers memorized everything - nothing was ever written down</li>
+                    <li><strong>Speed:</strong> They could encode, transmit, and decode a message in seconds</li>
+                </ul>
+                
+                <p><strong>How the Code Worked:</strong></p>
+                <ul>
+                    <li>Military terms were given Navajo names (e.g., "turtle" meant tank)</li>
+                    <li>Letters were represented by Navajo words (A = "wol-la-chee" meaning ant)</li>
+                    <li>The code used over 600 terms by war's end</li>
+                </ul>
+                
+                <p><strong>Legacy:</strong></p>
+                <ul>
+                    <li>Over 400 Navajo served as Code Talkers</li>
+                    <li>Their work was classified until 1968</li>
+                    <li>Received Congressional Gold Medals in 2001</li>
+                    <li>August 14 is National Navajo Code Talkers Day</li>
+                </ul>
+            </div>
+        """
+    },
     
-    "sacred mountains": """
-        <div style="line-height: 1.6;">
-            <p><strong>⛰️ The Four Sacred Mountains of the Diné</strong></p>
-            <p>The four sacred mountains mark the boundaries of traditional Dinétah (Navajo homeland). They were placed by the Holy People to protect and guide the Diné.</p>
-            
-            <p><strong>The Four Mountains:</strong></p>
-            <ul>
-                <li><strong>East - Sisnaajiní</strong> (Blanca Peak, Colorado) - White shell, dawn, new beginnings</li>
-                <li><strong>South - Tsoodził</strong> (Mount Taylor, New Mexico) - Turquoise, day, water</li>
-                <li><strong>West - Dookʼoʼoosłííd</strong> (San Francisco Peaks, Arizona) - Abalone shell, evening, harvest</li>
-                <li><strong>North - Dibé Nitsaa</strong> (Hesperus Peak, Colorado) - Black jet, night, protection</li>
-            </ul>
-            
-            <p><strong>Significance:</strong></p>
-            <ul>
-                <li>Each mountain is associated with a color, direction, and sacred stone</li>
-                <li>The mountains were created as boundaries for Diné territory</li>
-                <li>They hold spiritual significance in ceremonies and prayers</li>
-                <li>The mountains connect the Diné to their ancestral lands</li>
-            </ul>
-            
-            <p>Even today, the four sacred mountains remain central to Diné identity, spirituality, and connection to the land.</p>
-        </div>
-    """,
+    "sacred mountains": {
+        "keywords": ["sacred mountain", "sacred mountains", "mountains", "four mountains", "sisnaajiní", "tsoodził", "dookʼoʼoosłííd", "dibé nitsaa", "blanca peak", "mount taylor", "san francisco peaks", "hesperus"],
+        "answer": """
+            <div style="line-height: 1.6;">
+                <p><strong>⛰️ The Four Sacred Mountains of the Diné</strong></p>
+                <p>The four sacred mountains were placed by the Holy People to mark the boundaries of Dinétah (traditional Navajo homeland).</p>
+                
+                <p><strong>The Four Mountains:</strong></p>
+                <ul>
+                    <li><strong>East - Sisnaajiní (Blanca Peak, Colorado)</strong> - White shell, dawn, new beginnings</li>
+                    <li><strong>South - Tsoodził (Mount Taylor, New Mexico)</strong> - Turquoise, day, water</li>
+                    <li><strong>West - Dookʼoʼoosłííd (San Francisco Peaks, Arizona)</strong> - Abalone shell, evening, harvest</li>
+                    <li><strong>North - Dibé Nitsaa (Hesperus Peak, Colorado)</strong> - Black jet, night, protection</li>
+                </ul>
+                
+                <p><strong>Significance:</strong></p>
+                <ul>
+                    <li>Each mountain is associated with a sacred stone, color, and direction</li>
+                    <li>The mountains were created as boundaries for Diné territory</li>
+                    <li>They hold spiritual significance in ceremonies and prayers</li>
+                    <li>The mountains are considered living beings that protect the Diné</li>
+                </ul>
+            </div>
+        """
+    },
+    
+    "long walk": {
+        "keywords": ["long walk", "bosque redondo", "fort sumner", "1864", "1868", "treaty of 1868", "navajo removal", "forced march", "hweeldi"],
+        "answer": """
+            <div style="line-height: 1.6;">
+                <p><strong>👣 The Long Walk (Hwéeldi)</strong></p>
+                <p>The Long Walk (1864-1868) was a tragic period when the U.S. Army forced the Diné people to walk over 300 miles to Bosque Redondo (Hwéeldi) in New Mexico.</p>
+                
+                <p><strong>What Happened:</strong></p>
+                <ul>
+                    <li>In 1864, approximately 8,000-10,000 Diné were forced to walk over 300 miles</li>
+                    <li>Hundreds died during the journey from harsh conditions</li>
+                    <li>At Bosque Redondo, they faced starvation, disease for four years</li>
+                    <li>Approximately 2,000 Diné died during this period</li>
+                </ul>
+                
+                <p><strong>The Treaty of 1868:</strong></p>
+                <ul>
+                    <li>In 1868, a treaty was signed establishing the Navajo Reservation</li>
+                    <li>The Diné were allowed to return to their homeland</li>
+                    <li>This treaty established the Navajo Nation as a sovereign nation</li>
+                </ul>
+                
+                <p>The Long Walk represents resilience, survival, and the strength of the Diné people.</p>
+            </div>
+        """
+    }
 }
 
 def get_answer_from_knowledge(question):
-    """Check if the question matches any known topics"""
+    """Match question to knowledge base with improved keyword matching"""
     q_lower = question.lower()
     
-    # Check for keywords
-    if any(word in q_lower for word in ["k'é", "k'e", "kinship", "family"]):
-        return KNOWLEDGE_BASE["k'é"]
-    elif any(word in q_lower for word in ["clan", "clans", "dóoneʼé"]):
-        return KNOWLEDGE_BASE["clan"]
-    elif any(word in q_lower for word in ["hózhó", "hozho", "harmony", "balance", "beauty"]):
-        return KNOWLEDGE_BASE["hózhó"]
-    elif any(word in q_lower for word in ["weav", "weaving", "blanket", "rug", "spider woman"]):
-        return KNOWLEDGE_BASE["weaving"]
-    elif any(word in q_lower for word in ["code talker", "code talkers", "wwii", "world war"]):
-        return KNOWLEDGE_BASE["code talker"]
-    elif any(word in q_lower for word in ["sacred mountain", "mountains", "sisnaajiní", "tsoodził"]):
-        return KNOWLEDGE_BASE["sacred mountains"]
+    # Check each topic
+    for topic, data in KNOWLEDGE_BASE.items():
+        for keyword in data["keywords"]:
+            if keyword in q_lower:
+                logger.info(f"Matched question to topic: {topic} (keyword: {keyword})")
+                return data["answer"]
     
+    # If no match found, return None
     return None
 
-# Enhanced search function with fallback
-def search_online(question):
-    """Try to search online for answers"""
-    try:
-        # Use a simple search approach
-        search_url = f"https://en.wikipedia.org/wiki/{urllib.parse.quote_plus(question.replace(' ', '_'))}"
-        
-        # For demo purposes, return None to use knowledge base
-        # In production, you'd implement proper search
-        return None
-    except:
-        return None
-
 def generate_answer(question):
-    """Generate answer from knowledge base or search"""
+    """Generate answer from knowledge base"""
     # First check knowledge base
     answer = get_answer_from_knowledge(question)
     if answer:
         return answer
     
-    # If not found, try to search online
-    search_result = search_online(question)
-    if search_result:
-        return search_result
-    
-    # If still nothing, provide helpful response
+    # If no match, provide helpful response with suggestions
     return f"""
     <div style="line-height: 1.6;">
         <p><strong>📖 Learning About Diné Culture</strong></p>
-        <p>I'm still learning about that specific topic. Here are some related things you might want to explore:</p>
+        <p>I'm still learning about that specific topic. Here are some topics I can help you with:</p>
         <ul>
-            <li>Ask about <strong>k'é</strong> (kinship and relationships)</li>
-            <li>Learn about the <strong>clan system</strong> (how Diné people connect through family)</li>
-            <li>Explore <strong>hózhó</strong> (harmony, balance, and beauty)</li>
-            <li>Discover <strong>Navajo weaving</strong> traditions</li>
-            <li>Learn about the <strong>Code Talkers</strong> and their heroism</li>
-            <li>Understand the <strong>four sacred mountains</strong> and their significance</li>
+            <li><strong>K'é</strong> - kinship, family, and relationships</li>
+            <li><strong>Clans (Dóoneʼé)</strong> - the Navajo clan system and matrilineal structure</li>
+            <li><strong>Hózhó</strong> - harmony, balance, and beauty</li>
+            <li><strong>Navajo Weaving</strong> - traditions, Spider Woman, and rug patterns</li>
+            <li><strong>Code Talkers</strong> - the Navajo Marines who created an unbreakable code</li>
+            <li><strong>Four Sacred Mountains</strong> - the mountains that mark Diné territory</li>
+            <li><strong>The Long Walk</strong> - the forced relocation of 1864-1868</li>
         </ul>
-        <p>You can also try asking your question in a different way, or ask about one of these topics above!</p>
+        
+        <p><strong>Try asking:</strong></p>
+        <ul>
+            <li>"What is k'é?"</li>
+            <li>"Tell me about Navajo clans"</li>
+            <li>"What does hózhó mean?"</li>
+            <li>"Tell me about Navajo weaving"</li>
+            <li>"Who were the Code Talkers?"</li>
+            <li>"What are the four sacred mountains?"</li>
+            <li>"What happened during the Long Walk?"</li>
+        </ul>
+        
         <hr>
-        <p><em>💡 Tip: Try asking about specific topics like "What is k'é?" or "Tell me about Navajo clans"</em></p>
+        <p><em>💡 Tip: Try using the example buttons above or ask about one of the specific topics listed!</em></p>
     </div>
     """
 
-# HTML Template with improved UI
+# HTML Template - COMPLETE
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -259,11 +322,7 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diné Cultural Learning Bot</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
@@ -288,19 +347,10 @@ HTML_TEMPLATE = """
             text-align: center;
         }
         
-        .header h1 {
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
+        .header h1 { font-size: 2em; margin-bottom: 10px; }
+        .header p { opacity: 0.9; font-size: 1.1em; }
         
-        .header p {
-            opacity: 0.9;
-            font-size: 1.1em;
-        }
-        
-        .content {
-            padding: 30px;
-        }
+        .content { padding: 30px; }
         
         .protocol-box {
             background: #fef3c7;
@@ -311,12 +361,10 @@ HTML_TEMPLATE = """
             font-size: 14px;
         }
         
-        .ask-section {
-            margin-bottom: 25px;
-        }
+        .ask-section { margin-bottom: 25px; }
         
         .ask-label {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 600;
             color: #2c5f2d;
             margin-bottom: 10px;
@@ -331,13 +379,9 @@ HTML_TEMPLATE = """
             font-size: 16px;
             font-family: inherit;
             resize: vertical;
-            transition: border-color 0.3s;
         }
         
-        textarea:focus {
-            outline: none;
-            border-color: #2c5f2d;
-        }
+        textarea:focus { outline: none; border-color: #2c5f2d; }
         
         .submit-btn {
             background: #2c5f2d;
@@ -348,19 +392,11 @@ HTML_TEMPLATE = """
             font-size: 16px;
             cursor: pointer;
             margin-top: 15px;
-            transition: background 0.3s;
             font-weight: 500;
         }
         
-        .submit-btn:hover:not(:disabled) {
-            background: #1e3a1e;
-            transform: translateY(-2px);
-        }
-        
-        .submit-btn:disabled {
-            background: #95a5a6;
-            cursor: not-allowed;
-        }
+        .submit-btn:hover:not(:disabled) { background: #1e3a1e; transform: translateY(-2px); }
+        .submit-btn:disabled { background: #95a5a6; cursor: not-allowed; }
         
         .suggestions-section {
             background: #e8f5e9;
@@ -455,13 +491,48 @@ HTML_TEMPLATE = """
             vertical-align: middle;
         }
         
+        .answer-section {
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .answer-header {
+            background: #2c5f2d;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px 12px 0 0;
+            font-weight: bold;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .answer-header:before {
+            content: "📖";
+            font-size: 20px;
+        }
+        
         .answer {
             background: #f9f9f9;
             padding: 25px;
-            border-radius: 12px;
-            margin-top: 25px;
+            border-radius: 0 0 12px 12px;
             border-left: 4px solid #2c5f2d;
+            border-right: 1px solid #e0e0e0;
+            border-bottom: 1px solid #e0e0e0;
+            line-height: 1.6;
         }
+        
+        .answer p { margin-bottom: 12px; }
+        .answer ul, .answer ol { margin-left: 25px; margin-bottom: 12px; }
+        .answer li { margin-bottom: 6px; }
+        
+        @keyframes highlight {
+            0% { background: #fff3cd; border-left-color: #ffc107; }
+            100% { background: #f9f9f9; border-left-color: #2c5f2d; }
+        }
+        
+        .answer-highlight { animation: highlight 2s ease-out; }
         
         .fact-box {
             background: #fff3e0;
@@ -480,29 +551,12 @@ HTML_TEMPLATE = """
             font-size: 12px;
         }
         
-        hr {
-            margin: 20px 0;
-        }
-        
-        ul {
-            margin-left: 20px;
-            margin-top: 10px;
-            margin-bottom: 10px;
-        }
-        
-        li {
-            margin-bottom: 8px;
-        }
+        hr { margin: 20px 0; }
         
         @media (max-width: 600px) {
-            .content {
-                padding: 20px;
-            }
-            
-            .example-btn {
-                font-size: 11px;
-                padding: 6px 12px;
-            }
+            .content { padding: 20px; }
+            .example-btn { font-size: 11px; padding: 6px 12px; }
+            .answer-header { font-size: 16px; padding: 10px 15px; }
         }
     </style>
 </head>
@@ -519,13 +573,12 @@ HTML_TEMPLATE = """
                 This chatbot provides general cultural information from published educational sources.
             </div>
             
-            <!-- Ask Your Own Question Section -->
             <div class="ask-section">
                 <div class="ask-label">✍️ Ask Your Own Question</div>
                 <form method="POST" id="questionForm">
                     <textarea 
                         name="question" 
-                        placeholder="Example: What is the significance of the number four in Diné culture? How do Navajo clans work? Tell me about traditional healing..." 
+                        placeholder="Example: What is k'é? How do Navajo clans work? Tell me about the Code Talkers..." 
                         id="questionInput"
                         rows="4"
                     >{{ question }}</textarea>
@@ -543,7 +596,6 @@ HTML_TEMPLATE = """
                 <span>OR TRY ONE OF THESE</span>
             </div>
             
-            <!-- Suggested Questions Section -->
             <div class="suggestions-section">
                 <div class="suggestions-title">💡 POPULAR QUESTIONS TO EXPLORE</div>
                 <div class="example-buttons">
@@ -553,12 +605,14 @@ HTML_TEMPLATE = """
                     <button class="example-btn" data-question="Tell me about Navajo weaving traditions">🪶 Tell me about Navajo weaving</button>
                     <button class="example-btn" data-question="Who were the Navajo Code Talkers?">📡 Who were the Navajo Code Talkers?</button>
                     <button class="example-btn" data-question="What are the four sacred mountains?">⛰️ What are the four sacred mountains?</button>
+                    <button class="example-btn" data-question="What was the Long Walk?">👣 What was the Long Walk?</button>
                 </div>
             </div>
             
             {% if answer %}
-            <div class="answer">
-                {{ answer | safe }}
+            <div class="answer-section" id="answerSection">
+                <div class="answer-header">Your Answer</div>
+                <div class="answer" id="answerContent">{{ answer | safe }}</div>
             </div>
             {% endif %}
             
@@ -575,53 +629,43 @@ HTML_TEMPLATE = """
     </div>
     
     <script>
-        // Example buttons - fill the textarea and submit
         document.querySelectorAll('.example-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                const questionInput = document.getElementById('questionInput');
-                const submitBtn = document.getElementById('submitBtn');
-                const loadingIndicator = document.getElementById('loadingIndicator');
-                
-                // Fill the textarea
-                questionInput.value = this.dataset.question;
-                
-                // Show loading state
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Searching...';
-                loadingIndicator.style.display = 'inline-block';
-                
-                // Submit the form
+                document.getElementById('questionInput').value = this.dataset.question;
+                document.getElementById('submitBtn').disabled = true;
+                document.getElementById('submitBtn').textContent = 'Searching...';
+                document.getElementById('loadingIndicator').style.display = 'inline-block';
                 document.getElementById('questionForm').submit();
             });
         });
         
-        // Handle regular form submission
         document.getElementById('questionForm').addEventListener('submit', function() {
-            const questionInput = document.getElementById('questionInput');
-            const submitBtn = document.getElementById('submitBtn');
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            
-            // Don't submit empty questions
-            if (!questionInput.value.trim()) {
+            if (!document.getElementById('questionInput').value.trim()) {
                 alert('Please enter a question');
                 event.preventDefault();
                 return false;
             }
-            
-            // Show loading state
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Searching...';
-            loadingIndicator.style.display = 'inline-block';
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').textContent = 'Searching...';
+            document.getElementById('loadingIndicator').style.display = 'inline-block';
         });
         
-        // Clear loading state if page loads with answer
         window.addEventListener('load', function() {
             const submitBtn = document.getElementById('submitBtn');
             const loadingIndicator = document.getElementById('loadingIndicator');
+            const answerSection = document.getElementById('answerSection');
+            const answerContent = document.getElementById('answerContent');
+            
             if (submitBtn && loadingIndicator) {
                 submitBtn.disabled = false;
                 submitBtn.textContent = '🔍 Ask Question';
                 loadingIndicator.style.display = 'none';
+            }
+            
+            if (answerSection && answerContent) {
+                answerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                answerContent.classList.add('answer-highlight');
+                setTimeout(() => answerContent.classList.remove('answer-highlight'), 2000);
             }
         });
     </script>
@@ -645,7 +689,7 @@ def home():
         
         if question:
             try:
-                # Check seasonal restrictions
+                # Seasonal check for animal questions
                 current_month = datetime.now().month
                 animal_keywords = ["bear", "coyote", "wolf", "snake", "owl", "eagle"]
                 
@@ -653,12 +697,11 @@ def home():
                     answer = """
                         <div style="line-height: 1.6;">
                             <p><strong>🍂 Seasonal Teaching Protocol</strong></p>
-                            <p>During winter months (November-March), traditional Diné teachings advise against discussing certain animals and creation stories. This is a time for reflection, storytelling of other kinds, and preparation for spring.</p>
-                            <p>I'd be happy to tell you about other aspects of Diné culture! You can ask about topics like k'é (kinship), the clan system, hózhó (harmony), or Navajo traditions that are appropriate to discuss year-round.</p>
+                            <p>During winter months (November-March), traditional Diné teachings advise against discussing certain animals. This is a time for reflection and other types of storytelling.</p>
+                            <p>I'd be happy to tell you about other aspects of Diné culture! Try asking about k'é (kinship), the clan system, or hózhó (harmony).</p>
                         </div>
                     """
                 else:
-                    # Generate answer from knowledge base
                     answer = generate_answer(question)
                     
             except Exception as e:
