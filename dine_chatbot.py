@@ -348,48 +348,60 @@ def detect_principles(sources):
 # 6) Fallback answer (YOUR ORIGINAL - converted to return string)
 # ----------------------------
 def get_fallback_answer(question: str, sources):
-    principles = detect_principles(sources)
+    """Generate answer from sources - shows actual content"""
     output = []
     output.append('<div style="line-height: 1.6;">')
     
     if not sources:
         output.append("<p>I couldn't retrieve any sources from the allowed domains.</p>")
+        output.append("<p>Please try rephrasing your question or ask about:</p>")
+        output.append("<ul>")
+        output.append("<li>What is k'é?</li>")
+        output.append("<li>Who are the Hero Twins?</li>")
+        output.append("<li>What does hózhó mean?</li>")
+        output.append("</ul>")
         output.append("</div>")
         return '\n'.join(output)
     
-    # List sources
-    output.append('<p><strong>📚 Sources used:</strong></p>')
-    output.append('<ul>')
-    for i, s in enumerate(sources, start=1):
-        output.append(f'<li><a href="{s.get("url")}" target="_blank">{s.get("url")}</a></li>')
-    output.append('</ul>')
+    # Show the actual content from sources
+    output.append(f'<p><strong>📖 Answer about: {question}</strong></p>')
+    output.append('<hr>')
     
-    if not principles:
-        output.append("<p>I found sources, but they didn't contain clear Diné principle terms (k’é, hózhó, clan/kinship, etc.).</p>")
-        output.append("<p>Try asking a more culturally-anchored question (e.g., 'How does k’é guide relationships?').</p>")
-    else:
+    # Display content from each source
+    for i, s in enumerate(sources, start=1):
+        text = s.get('text', '')
+        url = s.get('url', 'Unknown')
+        label = s.get('label', 'Source')
+        
+        if text and len(text) > 50:
+            # Clean up the text
+            text = re.sub(r'\s+', ' ', text)
+            # Take first 1000 characters
+            display_text = text[:1500]
+            if len(text) > 1500:
+                display_text += "..."
+            
+            output.append(f'<p><strong>[{i}] {label}</strong><br>')
+            output.append(f'<a href="{url}" target="_blank">{url}</a></p>')
+            output.append(f'<blockquote style="background: #f5f5f5; padding: 12px; border-left: 3px solid #2c5f2d; margin: 10px 0;">')
+            output.append(f'{display_text}')
+            output.append(f'</blockquote>')
+        else:
+            output.append(f'<p><strong>[{i}] {label}</strong><br>')
+            output.append(f'<a href="{url}" target="_blank">{url}</a></p>')
+            output.append(f'<p>No readable text could be extracted from this source.</p>')
+        
+        if i < len(sources):
+            output.append('<hr>')
+    
+    # Also show principles if detected
+    principles = detect_principles(sources)
+    if principles:
         output.append('<p><strong>🏔️ Cultural Principles Detected:</strong></p>')
         output.append('<ul>')
         for p, data in principles.items():
             output.append(f'<li><strong>{p}</strong> - {data["hits"]} occurrences</li>')
         output.append('</ul>')
-        
-        output.append('<p><strong>📖 How these principles apply to your question:</strong></p>')
-        output.append('<ul>')
-        if "k'é (kinship / relational responsibility)" in principles:
-            output.append("<li>Practice k’é in action: lead with kindness, friendliness, generosity, and peacefulness, and treat relationships as responsibilities, not transactions.</li>")
-        if "hózhó (balance / harmony)" in principles:
-            output.append("<li>Aim for hózhó: choose approaches that build harmony and balance in the relationship and the wider community.</li>")
-        if "community responsibility" in principles:
-            output.append("<li>Show up consistently in community spaces: trust grows from repeated respectful presence and helpfulness over time.</li>")
-        if "matrilineal / matrilocal (family structure)" in principles:
-            output.append("<li>Be respectful of family structures and elders: relationships deepen when you honor household/community context, not just one-on-one interaction.</li>")
-        output.append('</ul>')
-        
-        output.append('<p><strong>📝 Evidence snippets:</strong></p>')
-        for pname, meta in list(principles.items())[:3]:
-            if meta["evidence"]:
-                output.append(f'<p><em>{pname}:</em><br>"{meta["evidence"][0][:400]}"</p>')
     
     output.append('</div>')
     return '\n'.join(output)
