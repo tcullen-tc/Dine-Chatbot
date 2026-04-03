@@ -25,19 +25,18 @@ DID_YOU_KNOW_FACTS = [
     "Traditional Navajo hogans are built with the door facing east to greet the morning sun.",
     "The four sacred mountains mark the boundaries of traditional Dinétah (Navajo homeland).",
     "Weaving was taught to the Navajo by Spider Woman, a holy being.",
+    "Coyote (Ma'ii) is an important trickster figure in Diné stories.",
 ]
 
 # ----------------------------
-# LOCAL DOCUMENTS FOLDER - YOUR 12 TEXT FILES
+# LOCAL DOCUMENTS FOLDER
 # ----------------------------
 def find_documents_folder():
-    """Find the documents folder in the repository"""
     possible_paths = [
         os.path.join(os.path.dirname(__file__), "dine_documents"),
         os.path.join(os.getcwd(), "dine_documents"),
         "/opt/render/project/src/dine_documents",
         "/app/dine_documents",
-        "/home/tony-cullen/dine_documents",
     ]
     
     for path in possible_paths:
@@ -53,7 +52,6 @@ def find_documents_folder():
 DOCUMENTS_FOLDER = find_documents_folder()
 
 def load_local_documents():
-    """Load all text files from the documents folder"""
     documents = []
     
     if not os.path.exists(DOCUMENTS_FOLDER):
@@ -85,7 +83,7 @@ def load_local_documents():
     return documents
 
 # ----------------------------
-# COMPLETE ALLOWED DOMAINS - FULL ORIGINAL LIST (39 domains)
+# COMPLETE ALLOWED DOMAINS - FULL 39 DOMAINS
 # ----------------------------
 ALLOWED_DOMAINS = [
     # --- Official Navajo Nation / Diné Government ---
@@ -139,9 +137,7 @@ ALLOWED_DOMAINS = [
     "traditionalnavajoteachings.org",
 ]
 
-TRUSTED_MEDIA = [
-    {"title": "Diné Teaching Video", "url": "https://youtu.be/waCH87_-Adk", "source": "YouTube"},
-]
+TRUSTED_MEDIA = []
 ALLOWED_EXACT_URLS = {m["url"] for m in TRUSTED_MEDIA}
 
 # --- Domain Trust Scores (complete) ---
@@ -209,7 +205,7 @@ def is_hibernation_season(today: date | None = None) -> bool:
 def mentions_animals(text: str) -> bool:
     return any(k in text.lower() for k in ANIMAL_KEYWORDS)
 
-USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1"
+USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15"
 
 # ----------------------------
 # HTML -> Text extractor
@@ -325,16 +321,13 @@ def ddg_search(query: str, max_results: int = 8):
     return results
 
 # ----------------------------
-# Gather ALL sources (LOCAL + WEB) - COMPLETE
+# Gather ALL sources (LOCAL + WEB)
 # ----------------------------
 def gather_all_sources(question: str, max_pages: int = 6):
-    """Gather sources from local documents AND web"""
     all_sources = []
     
-    # STEP 1: Load and search local documents
-    print("\n" + "="*50)
-    print("📚 SEARCHING LOCAL DOCUMENTS")
-    print("="*50)
+    # STEP 1: Search local documents
+    print("\n📚 Searching local documents...")
     local_docs = load_local_documents()
     
     question_lower = question.lower()
@@ -345,17 +338,13 @@ def gather_all_sources(question: str, max_pages: int = 6):
         for word in words:
             score += text_lower.count(word) * 5
         
-        # Boost for exact filename matches
         if "hero" in question_lower and "hero_twins" in doc['label'].lower():
             score += 10000
-            print(f"   ⭐⭐⭐ HERO TWINS FILE MATCHED!")
         if "black god" in question_lower and "black_god" in doc['label'].lower():
             score += 10000
-            print(f"   ⭐⭐⭐ BLACK GOD FILE MATCHED!")
         if "coyote" in question_lower:
             if "american_indian" in doc['label'].lower() or "folklore" in doc['label'].lower():
                 score += 2000
-                print(f"   🦊 Potential Coyote content found!")
             score += text_lower.count("coyote") * 100
         
         if score > 10:
@@ -364,38 +353,15 @@ def gather_all_sources(question: str, max_pages: int = 6):
             print(f"   ✅ Local match: {doc['label']} (score: {score})")
     
     # STEP 2: Search the web
-    print("\n" + "="*50)
-    print("🌐 SEARCHING WEB SOURCES")
-    print("="*50)
-    clean_q = question.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'").strip()
-    topic = clean_q.strip()
-    if len(topic) < 12:
-        topic = f"{topic} Diné Navajo"
-    search_query = f"{topic} meaning Diné Navajo culture"
+    print("\n🌐 Searching web sources...")
+    clean_q = question.strip()
+    search_query = f"{clean_q} Navajo Diné"
     
-    urls = ddg_search(search_query, max_results=12)
+    urls = ddg_search(search_query, max_results=8)
     allowed_urls = [u for u in urls if is_allowed(u)]
-    
-    if not allowed_urls:
-        urls = []
-        for d in sorted(ALLOWED_DOMAINS):
-            q = f"site:{d} {clean_q}"
-            urls.extend(ddg_search(q, max_results=4))
-        allowed_urls = [u for u in urls if is_allowed(u)]
-    
     allowed_urls = allowed_urls[:max_pages]
-    trusted_urls = list(ALLOWED_EXACT_URLS)
     
-    combined_urls = []
-    seen = set()
-    for u in (trusted_urls + allowed_urls):
-        if u not in seen:
-            seen.add(u)
-            combined_urls.append(u)
-    
-    print(f"Found {len(combined_urls)} web sources to check")
-    
-    for u in combined_urls:
+    for u in allowed_urls:
         tier, score = trust_for_url(u)
         try:
             html = fetch_url(u, timeout=15)
@@ -405,27 +371,22 @@ def gather_all_sources(question: str, max_pages: int = 6):
             parser.feed(html)
             text = parser.get_text()
             
-            t = text.lower()
-            if ("navajo" not in t) and ("diné" not in t) and ("dine" not in t):
-                continue
-            
-            all_sources.append({
-                "url": u,
-                "domain": domain_of(u),
-                "tier": tier,
-                "trust": score,
-                "label": label_for_source(domain_of(u), tier),
-                "text": text[:8000],
-                "source_type": "web"
-            })
-            print(f"   ✅ Web source: {domain_of(u)}")
+            if text and len(text) > 200:
+                all_sources.append({
+                    "url": u,
+                    "domain": domain_of(u),
+                    "tier": tier,
+                    "trust": score,
+                    "label": label_for_source(domain_of(u), tier),
+                    "text": text[:8000],
+                    "source_type": "web"
+                })
+                print(f"   ✅ Web source: {domain_of(u)}")
         except Exception as e:
-            print(f"   ❌ Error processing {u}: {e}")
+            print(f"   ❌ Error: {e}")
             continue
     
-    # Sort by trust (local docs have trust=1.00 so they appear first)
     all_sources.sort(key=lambda s: s.get("trust", 0), reverse=True)
-    print(f"\n📊 TOTAL SOURCES FOUND: {len(all_sources)}")
     return all_sources
 
 # ----------------------------
@@ -436,10 +397,9 @@ def detect_principles(sources):
         return (s or "").lower().replace("’", "'")
     
     PRINCIPLES = {
-        "k'é (kinship / relational responsibility)": ["k'e", "k’é", "kinship", "clan", "clans", "affiliation"],
-        "hózhó (balance / harmony)": ["hozho", "hózhó", "harmony", "balance"],
-        "community responsibility": ["community", "responsibility", "solidarity", "respect", "kindness", "generosity", "peaceful"],
-        "matrilineal / matrilocal (family structure)": ["matrilineal", "matrilocal", "descent", "mother", "household"],
+        "k'é (kinship)": ["k'e", "k’é", "kinship", "clan", "relative"],
+        "hózhó (harmony)": ["hozho", "hózhó", "harmony", "balance"],
+        "community responsibility": ["community", "responsibility", "respect", "kindness"],
     }
     
     found = {}
@@ -448,36 +408,21 @@ def detect_principles(sources):
         if not text:
             continue
         for pname, kws in PRINCIPLES.items():
-            hits = sum(text.count(norm(k)) for k in kws if k.strip())
+            hits = sum(text.count(k) for k in kws)
             if hits > 0:
                 if pname not in found:
-                    found[pname] = {"hits": 0, "evidence": []}
+                    found[pname] = {"hits": 0}
                 found[pname]["hits"] += hits
     return found
 
 # ----------------------------
-# Generate answer from sources
+# Generate answer from sources - SIMPLIFIED TO AVOID CRASHES
 # ----------------------------
 def generate_answer(question: str, sources):
     if not sources:
-        return """
-        <div style="line-height: 1.6;">
-            <p><strong>📖 No sources found.</strong></p>
-            <p>I couldn't retrieve any sources from local documents or the web.</p>
-            <p><strong>Try asking about:</strong></p>
-            <ul>
-                <li>Who are the Hero Twins?</li>
-                <li>Who is Black God?</li>
-                <li>What is k'é?</li>
-                <li>Tell me about Coyote</li>
-            </ul>
-        </div>
-        """
-    
-    principles = detect_principles(sources)
+        return "<p>No sources found. Please try a different question.</p>"
     
     output = []
-    output.append('<div style="line-height: 1.6;">')
     output.append(f'<p><strong>📖 Question:</strong> {question}</p>')
     output.append('<hr>')
     
@@ -486,132 +431,54 @@ def generate_answer(question: str, sources):
     web_sources = [s for s in sources if s.get('source_type') != 'local']
     
     if local_sources:
-        output.append('<p><strong>📚 Local Documents Found:</strong></p>')
-        output.append('<ul>')
+        output.append('<p><strong>📚 Local Documents Found:</strong></p><ul>')
         for s in local_sources[:3]:
-            output.append(f'<li><strong>{s["label"]}</strong> (Local Document)</li>')
+            output.append(f'<li><strong>{s["label"]}</strong> (Local)</li>')
         output.append('</ul>')
     
     if web_sources:
-        output.append('<p><strong>🌐 Web Sources Found:</strong></p>')
-        output.append('<ul>')
+        output.append('<p><strong>🌐 Web Sources Found:</strong></p><ul>')
         for s in web_sources[:3]:
-            label = s.get('label', 'Source')
-            url = s.get('url', '')
-            output.append(f'<li><strong>{label}</strong>: <a href="{url}" target="_blank">{url}</a></li>')
+            output.append(f'<li><strong>{s["label"]}</strong>: <a href="{s["url"]}" target="_blank">{s["url"]}</a></li>')
         output.append('</ul>')
     
     output.append('<hr>')
     
-    # Show content from the best source - SKIP HEADERS and find REAL content
-    best_source = sources[0]
-    text = best_source.get('text', '')
-    source_label = best_source.get('label', 'Source')
-    source_type = best_source.get('source_type', 'web')
+    # Show content from best source
+    best = sources[0]
+    text = best.get('text', '')
     
     if text:
-        # Clean the text - remove Gutenberg headers and footers
+        # Clean up text - remove common headers
         lines = text.split('\n')
-        content_lines = []
-        skip_header = True
-        
-        # Keywords that indicate we're past the header
-        content_start_markers = [
-            "coyote", "once upon", "long ago", "there lived", "story", 
-            "legend", "tale", "myth", "tradition", "according to"
-        ]
-        
-        # Keywords that indicate we're in footer/end matter
-        footer_markers = [
-            "end of the project gutenberg", "end of this project gutenberg", 
-            "*** end", "end of the ebook", "end of this ebook",
-            "produced by", "distributed proofreading", "copyright"
-        ]
+        clean_lines = []
+        start_collecting = False
         
         for line in lines:
             line_lower = line.lower()
+            # Start collecting when we find story content
+            if not start_collecting:
+                if any(word in line_lower for word in ['coyote', 'story', 'legend', 'tale', 'once', 'long ago']):
+                    start_collecting = True
             
-            # Check if this line signals start of content
-            if skip_header:
-                if any(marker in line_lower for marker in content_start_markers):
-                    skip_header = False
-                    # Add this line as it's the start
-                    content_lines.append(line)
-                continue
-            
-            # Stop at footer
-            if any(marker in line_lower for marker in footer_markers):
-                break
-            
-            # Skip very short lines and empty lines
-            if len(line.strip()) < 30:
-                continue
-            
-            content_lines.append(line)
-        
-        # If we didn't find a clear start, just use the first substantial paragraphs
-        if not content_lines:
-            for line in lines:
-                if len(line.strip()) > 80:
-                    content_lines.append(line)
-                if len(content_lines) >= 10:
+            if start_collecting:
+                # Stop at footers
+                if 'gutenberg' in line_lower or 'copyright' in line_lower:
                     break
+                if len(line.strip()) > 40:
+                    clean_lines.append(line.strip())
         
-        # Join back into text
-        clean_text = '\n'.join(content_lines)
-        
-        # Split into paragraphs
-        paragraphs = [p for p in clean_text.split('\n\n') if len(p) > 100]
-        if not paragraphs:
-            paragraphs = [p for p in clean_text.split('\n') if len(p) > 100]
-        
-        if paragraphs:
-            output.append(f'<p><strong>📖 Information from {source_label}:</strong></p>')
-            
-            # For Coyote questions, specifically look for Coyote-related paragraphs
-            if "coyote" in question.lower():
-                coyote_paragraphs = []
-                for p in paragraphs:
-                    if "coyote" in p.lower():
-                        coyote_paragraphs.append(p)
-                
-                if coyote_paragraphs:
-                    for p in coyote_paragraphs[:4]:
-                        clean_p = re.sub(r'\s+', ' ', p)
-                        if len(clean_p) > 800:
-                            clean_p = clean_p[:800] + "..."
-                        output.append(f'<blockquote style="background: #f9f9f9; padding: 12px; border-left: 3px solid #2c5f2d; margin: 10px 0;">{clean_p}</blockquote>')
-                else:
-                    # Show first few paragraphs if no specific Coyote content found
-                    for p in paragraphs[:4]:
-                        clean_p = re.sub(r'\s+', ' ', p)
-                        if len(clean_p) > 800:
-                            clean_p = clean_p[:800] + "..."
-                        output.append(f'<blockquote style="background: #f9f9f9; padding: 12px; border-left: 3px solid #2c5f2d; margin: 10px 0;">{clean_p}</blockquote>')
-            else:
-                # General case - show top paragraphs
-                for p in paragraphs[:4]:
-                    clean_p = re.sub(r'\s+', ' ', p)
-                    if len(clean_p) > 800:
-                        clean_p = clean_p[:800] + "..."
-                    output.append(f'<blockquote style="background: #f9f9f9; padding: 12px; border-left: 3px solid #2c5f2d; margin: 10px 0;">{clean_p}</blockquote>')
-        else:
-            output.append(f'<p><em>No readable content could be extracted from {source_label}.</em></p>')
+        if clean_lines:
+            # Take first 5 clean lines
+            content = ' '.join(clean_lines[:5])
+            if len(content) > 800:
+                content = content[:800] + '...'
+            output.append(f'<blockquote style="background:#f9f9f9;padding:12px;border-left:3px solid #2c5f2d;">{content}</blockquote>')
     
-    # Show principles if detected
-    if principles:
-        output.append('<hr>')
-        output.append('<p><strong>🏔️ Cultural Principles Detected:</strong></p>')
-        output.append('<ul>')
-        for p, data in list(principles.items())[:4]:
-            output.append(f'<li><strong>{p}</strong> - {data["hits"]} occurrences</li>')
-        output.append('</ul>')
-    
-    output.append('</div>')
     return '\n'.join(output)
 
 # ----------------------------
-# HTML Template (complete)
+# HTML Template
 # ----------------------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -643,7 +510,6 @@ HTML_TEMPLATE = """
             text-align: center;
         }
         .header h1 { font-size: 2em; margin-bottom: 10px; }
-        .header p { opacity: 0.9; font-size: 1.1em; }
         .content { padding: 30px; }
         .protocol-box {
             background: #fef3c7;
@@ -652,14 +518,6 @@ HTML_TEMPLATE = """
             border-radius: 10px;
             margin-bottom: 20px;
             font-size: 14px;
-        }
-        .ask-section { margin-bottom: 25px; }
-        .ask-label {
-            font-size: 18px;
-            font-weight: 600;
-            color: #2c5f2d;
-            margin-bottom: 10px;
-            display: block;
         }
         textarea {
             width: 100%;
@@ -680,28 +538,14 @@ HTML_TEMPLATE = """
             font-size: 16px;
             cursor: pointer;
             margin-top: 15px;
-            font-weight: 500;
         }
-        .submit-btn:hover:not(:disabled) { background: #1e3a1e; transform: translateY(-2px); }
+        .submit-btn:hover:not(:disabled) { background: #1e3a1e; }
         .submit-btn:disabled { background: #95a5a6; cursor: not-allowed; }
-        .suggestions-section {
-            background: #e8f5e9;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-        }
-        .suggestions-title {
-            font-weight: 600;
-            color: #2c5f2d;
-            margin-bottom: 12px;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
         .example-buttons {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
+            margin: 20px 0;
         }
         .example-btn {
             background: white;
@@ -711,35 +555,8 @@ HTML_TEMPLATE = """
             border-radius: 25px;
             cursor: pointer;
             font-size: 13px;
-            transition: all 0.3s;
         }
-        .example-btn:hover { background: #2c5f2d; color: white; transform: translateY(-2px); }
-        .divider {
-            text-align: center;
-            margin: 20px 0;
-            position: relative;
-        }
-        .divider:before {
-            content: "";
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: #e0e0e0;
-        }
-        .divider span {
-            background: white;
-            padding: 0 15px;
-            position: relative;
-            color: #999;
-            font-size: 12px;
-        }
-        .loading-container {
-            display: inline-block;
-            margin-left: 15px;
-            vertical-align: middle;
-        }
+        .example-btn:hover { background: #2c5f2d; color: white; }
         .loading-spinner {
             display: inline-block;
             width: 20px;
@@ -755,35 +572,13 @@ HTML_TEMPLATE = """
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .searching-message {
-            display: inline-block;
-            color: #2c5f2d;
-            font-style: italic;
-            vertical-align: middle;
-        }
-        .answer-section {
-            margin-top: 30px;
-            margin-bottom: 20px;
-        }
-        .answer-header {
-            background: #2c5f2d;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 12px 12px 0 0;
-            font-weight: bold;
-            font-size: 18px;
-        }
-        .answer-header:before { content: "📖"; margin-right: 10px; }
         .answer {
             background: #f9f9f9;
             padding: 25px;
-            border-radius: 0 0 12px 12px;
+            border-radius: 12px;
+            margin-top: 20px;
             border-left: 4px solid #2c5f2d;
-            line-height: 1.6;
         }
-        .answer p { margin-bottom: 12px; }
-        .answer ul, .answer ol { margin-left: 25px; margin-bottom: 12px; }
-        .answer li { margin-bottom: 6px; }
         .answer blockquote { margin: 10px 0; padding: 10px; background: #f0f0f0; border-left: 3px solid #2c5f2d; }
         .fact-box {
             background: #fff3e0;
@@ -791,7 +586,6 @@ HTML_TEMPLATE = """
             border-radius: 10px;
             margin-top: 20px;
             font-size: 14px;
-            border-left: 4px solid #f59e0b;
         }
         .footer {
             background: #f5f5f5;
@@ -800,11 +594,7 @@ HTML_TEMPLATE = """
             color: #666;
             font-size: 12px;
         }
-        hr { margin: 20px 0; }
-        @media (max-width: 600px) {
-            .content { padding: 20px; }
-            .example-btn { font-size: 11px; padding: 6px 12px; }
-        }
+        hr { margin: 15px 0; }
     </style>
 </head>
 <body>
@@ -815,42 +605,29 @@ HTML_TEMPLATE = """
         </div>
         <div class="content">
             <div class="protocol-box">
-                🌄 <strong>Cultural Note:</strong> Some Diné traditions contain sacred knowledge not shared publicly. 
-                This chatbot provides general cultural information from published educational sources.
+                🌄 <strong>Cultural Note:</strong> Some Diné traditions contain sacred knowledge not shared publicly.
             </div>
             
-            <div class="ask-section">
-                <div class="ask-label">✍️ Ask Your Own Question</div>
-                <form method="POST" id="questionForm">
-                    <textarea name="question" placeholder="Example: Who are the Hero Twins? What is k'é? Tell me about Coyote..." rows="4">{{ question }}</textarea>
-                    <div>
-                        <button type="submit" class="submit-btn" id="submitBtn">🔍 Ask Question</button>
-                        <div id="loadingIndicator" style="display: none;" class="loading-container">
-                            <span class="loading-spinner"></span>
-                            <span class="searching-message">Searching local documents and trusted Diné sources...</span>
-                        </div>
+            <form method="POST" id="questionForm">
+                <textarea name="question" placeholder="Example: Who are the Hero Twins? Who is Coyote? What is k'é?" rows="4">{{ question }}</textarea>
+                <div>
+                    <button type="submit" class="submit-btn" id="submitBtn">🔍 Ask Question</button>
+                    <div id="loadingIndicator" style="display: none; margin-left: 15px;">
+                        <span class="loading-spinner"></span> Searching...
                     </div>
-                </form>
-            </div>
-            
-            <div class="divider"><span>OR TRY ONE OF THESE</span></div>
-            
-            <div class="suggestions-section">
-                <div class="suggestions-title">💡 POPULAR QUESTIONS TO EXPLORE</div>
-                <div class="example-buttons">
-                    <button class="example-btn" data-question="Who are the Hero Twins?">🏹 Hero Twins</button>
-                    <button class="example-btn" data-question="Who is Black God?">⭐ Black God</button>
-                    <button class="example-btn" data-question="Tell me about Coyote">🦊 Coyote Stories</button>
-                    <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
-                    <button class="example-btn" data-question="What does hózhó mean?">☯️ Hózhó</button>
-                    <button class="example-btn" data-question="What is the Long Walk?">👣 The Long Walk</button>
                 </div>
+            </form>
+            
+            <div class="example-buttons">
+                <button class="example-btn" data-question="Who are the Hero Twins?">🏹 Hero Twins</button>
+                <button class="example-btn" data-question="Who is Black God?">⭐ Black God</button>
+                <button class="example-btn" data-question="Who is Coyote?">🦊 Coyote</button>
+                <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
             </div>
             
             {% if answer %}
-            <div class="answer-section" id="answerSection">
-                <div class="answer-header">Your Answer</div>
-                <div class="answer" id="answerContent">{{ answer | safe }}</div>
+            <div class="answer">
+                {{ answer | safe }}
             </div>
             {% endif %}
             
@@ -860,7 +637,7 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <div class="footer">
-            🌄 Searching: Local documents + {{ allowed_domains_count }} trusted Diné web sources
+            🌄 Searching {{ doc_count }} local documents + {{ domain_count }} trusted web sources
         </div>
     </div>
     <script>
@@ -873,27 +650,8 @@ HTML_TEMPLATE = """
             });
         });
         document.getElementById('questionForm').addEventListener('submit', function() {
-            if (!document.getElementById('questionInput').value.trim()) {
-                alert('Please enter a question');
-                event.preventDefault();
-                return false;
-            }
             document.getElementById('submitBtn').disabled = true;
-            document.getElementById('submitBtn').textContent = 'Searching...';
             document.getElementById('loadingIndicator').style.display = 'inline-block';
-        });
-        window.addEventListener('load', function() {
-            const submitBtn = document.getElementById('submitBtn');
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            const answerSection = document.getElementById('answerSection');
-            if (submitBtn && loadingIndicator) {
-                submitBtn.disabled = false;
-                submitBtn.textContent = '🔍 Ask Question';
-                loadingIndicator.style.display = 'none';
-            }
-            if (answerSection) {
-                answerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
         });
     </script>
 </body>
@@ -913,6 +671,7 @@ def home():
     question = ""
     answer = ""
     random_fact = random.choice(DID_YOU_KNOW_FACTS)
+    local_docs = load_local_documents()
     
     if request.method == 'POST':
         question = request.form.get('question', '').strip()
@@ -920,16 +679,9 @@ def home():
         if question:
             try:
                 if SEASONAL_MODE and is_hibernation_season() and mentions_animals(question):
-                    answer = """
-                        <div style="line-height: 1.6;">
-                            <p><strong>🍂 Seasonal Teaching Protocol</strong></p>
-                            <p>During winter months (November-March), traditional Diné teachings advise against discussing certain animals. Please ask about other aspects of Diné culture.</p>
-                        </div>
-                    """
+                    answer = "<p>During winter months, traditional Diné teachings advise against discussing certain animals.</p>"
                 else:
-                    print(f"\n{'='*60}")
-                    print(f"QUESTION: {question}")
-                    print(f"{'='*60}")
+                    print(f"\nQUESTION: {question}")
                     
                     sources_result = []
                     def gather():
@@ -937,29 +689,27 @@ def home():
                     
                     thread = threading.Thread(target=gather)
                     thread.start()
-                    thread.join(timeout=35)
+                    thread.join(timeout=30)
                     
                     if thread.is_alive():
-                        answer = "Search is taking longer than expected. Please try a more specific question."
+                        answer = "Search is taking longer than expected. Please try again."
                     else:
                         sources = sources_result[0] if sources_result else []
-                        print(f"\n📊 TOTAL SOURCES FOUND: {len(sources)}")
                         answer = generate_answer(question, sources)
                         
             except Exception as e:
                 print(f"Error: {e}")
-                answer = f"I encountered an issue: {str(e)}. Please try again."
+                answer = f"Error: {str(e)}"
     
     return render_template_string(HTML_TEMPLATE, 
                                    question=question, 
                                    answer=answer, 
                                    random_fact=random_fact,
-                                   allowed_domains_count=len(ALLOWED_DOMAINS))
+                                   doc_count=len(local_docs),
+                                   domain_count=len(ALLOWED_DOMAINS))
 
 if __name__ == "__main__":
-    print(f"\n{'='*60}")
-    print("Diné Cultural Learning Bot Starting...")
-    print(f"📁 Local documents folder: {DOCUMENTS_FOLDER}")
-    print(f"🌐 Allowed web domains: {len(ALLOWED_DOMAINS)}")
-    print(f"{'='*60}\n")
+    print(f"\nStarting Diné Cultural Learning Bot...")
+    print(f"Documents folder: {DOCUMENTS_FOLDER}")
+    print(f"Allowed domains: {len(ALLOWED_DOMAINS)}")
     app.run(host='0.0.0.0', port=5000, debug=True)
