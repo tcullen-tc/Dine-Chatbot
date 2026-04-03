@@ -19,7 +19,7 @@ DID_YOU_KNOW_FACTS = [
 ]
 
 # ----------------------------
-# APPROVED DINÉ DOMAINS - ONLY THESE ARE SEARCHED
+# APPROVED DINÉ DOMAINS - ORIGINAL MULTI-LINE FORMAT
 # ----------------------------
 APPROVED_DOMAINS = [
     # --- Official Navajo Nation / Diné Government ---
@@ -125,7 +125,7 @@ LOCAL_DOCUMENTS = load_local_documents()
 # Dynamic Keyword Extraction
 # ----------------------------
 def extract_keywords(question):
-    """Extract meaningful keywords from the question dynamically"""
+    """Extract meaningful keywords from the question"""
     stop_words = {'what', 'who', 'how', 'why', 'when', 'where', 'is', 'are', 'was', 'were',
                   'the', 'a', 'an', 'and', 'or', 'but', 'for', 'nor', 'so', 'yet', 'of',
                   'to', 'in', 'for', 'on', 'by', 'with', 'without', 'about', 'tell', 'me',
@@ -135,20 +135,24 @@ def extract_keywords(question):
     words = question.lower().split()
     keywords = [w for w in words if w not in stop_words and len(w) > 2]
     
-    # Also keep 2-word phrases
+    # Keep important phrases (2-3 words)
     phrases = []
     for i in range(len(words) - 1):
         phrase = f"{words[i]} {words[i+1]}"
         if len(phrase) > 5 and words[i] not in stop_words:
             phrases.append(phrase)
     
-    # Combine, remove duplicates
+    for i in range(len(words) - 2):
+        phrase = f"{words[i]} {words[i+1]} {words[i+2]}"
+        if len(phrase) > 8 and words[i] not in stop_words:
+            phrases.append(phrase)
+    
     all_keywords = list(set(keywords + phrases))
-    print(f"🔍 Extracted keywords: {all_keywords[:8]}")
+    print(f"🔍 Extracted keywords: {all_keywords[:10]}")
     return all_keywords
 
 # ----------------------------
-# HTML to Text Extractor for web content
+# HTML to Text Extractor
 # ----------------------------
 class TextExtractor(HTMLParser):
     def __init__(self):
@@ -192,8 +196,7 @@ def is_approved_domain(url):
     domain = domain_of(url)
     return any(domain.endswith(d) for d in APPROVED_DOMAINS)
 
-def ddg_search_approved(query, max_results=5):
-    """Search DuckDuckGo but only return results from approved domains"""
+def ddg_search_approved(query, max_results=4):
     try:
         q = urllib.parse.quote_plus(query)
         url = f"https://html.duckduckgo.com/html/?q={q}"
@@ -218,74 +221,103 @@ def ddg_search_approved(query, max_results=5):
         return []
 
 # ----------------------------
-# Extract relevant paragraph
+# Extract relevant content from a document
 # ----------------------------
-def extract_relevant_paragraph(content, keywords):
-    """Extract the most relevant paragraph based on keywords"""
-    paragraphs = content.split('\n\n')
-    if len(paragraphs) < 2:
-        paragraphs = content.split('\n')
+def extract_relevant_content(content, keywords, filename=""):
+    """Extract the most relevant sentences from content"""
+    # Split into sentences
+    sentences = re.split(r'(?<=[.!?])\s+', content)
     
-    best_para = ""
-    best_score = 0
-    
-    for para in paragraphs:
-        if len(para) < 100:
+    # Score each sentence
+    scored_sentences = []
+    for sent in sentences:
+        if len(sent) < 40:
             continue
-        para_lower = para.lower()
+        sent_lower = sent.lower()
+        
         # Skip Gutenberg headers
-        if 'gutenberg' in para_lower or 'project gutenberg' in para_lower:
+        if 'gutenberg' in sent_lower or 'project gutenberg' in sent_lower:
             continue
+        
         score = 0
         for kw in keywords:
-            score += para_lower.count(kw) * 10
-        if score > best_score:
-            best_score = score
-            best_para = para
+            score += sent_lower.count(kw) * 10
+        
+        # Bonus for exact phrase matches
+        if "black god" in sent_lower:
+            score += 500
+        if "haashch" in sent_lower:
+            score += 500
+        if "hero twin" in sent_lower:
+            score += 500
+        if "monster slayer" in sent_lower:
+            score += 500
+        if "coyote" in sent_lower:
+            score += 300
+        
+        if score > 0:
+            scored_sentences.append((score, sent.strip()))
     
-    if best_para:
-        best_para = re.sub(r'\s+', ' ', best_para)
-        if len(best_para) > 800:
-            best_para = best_para[:800] + "..."
-        return best_para
-    return None
+    scored_sentences.sort(reverse=True, key=lambda x: x[0])
+    
+    # Return top 3-5 sentences
+    result_sentences = []
+    for score, sent in scored_sentences[:5]:
+        # Clean up
+        sent = re.sub(r'\s+', ' ', sent)
+        result_sentences.append(sent)
+    
+    return result_sentences
 
 # ----------------------------
 # Search local documents
 # ----------------------------
 def search_local(question, keywords):
     results = []
+    question_lower = question.lower()
     
     for doc in LOCAL_DOCUMENTS:
         content_lower = doc['content'].lower()
         score = 0
         
-        for kw in keywords:
-            count = content_lower.count(kw)
-            if count > 0:
-                score += count * 10
+        # Special priority for exact filename matches
+        if "black_god_info" in doc['filename'].lower() and ("black god" in question_lower or "haashch" in question_lower):
+            score = 100000
+            print(f"   ⭐ Found Black God file: {doc['filename']}")
+        elif "hero_twins" in doc['filename'].lower() and ("hero twin" in question_lower or "monster slayer" in question_lower):
+            score = 100000
+            print(f"   ⭐ Found Hero Twins file: {doc['filename']}")
+        elif "american_indian" in doc['filename'].lower() and "coyote" in question_lower:
+            score = 50000
+            print(f"   🦊 Found Coyote story file: {doc['filename']}")
+        else:
+            # Normal scoring
+            for kw in keywords:
+                count = content_lower.count(kw)
+                if count > 0:
+                    score += count * 10
         
         if score > 0:
-            relevant_para = extract_relevant_paragraph(doc['content'], keywords)
-            if relevant_para:
+            # Extract relevant sentences
+            relevant_sentences = extract_relevant_content(doc['content'], keywords, doc['filename'])
+            if relevant_sentences:
                 results.append({
                     "title": doc['name'],
-                    "content": relevant_para,
+                    "content": ' '.join(relevant_sentences),
                     "score": score,
-                    "type": "local"
+                    "type": "local",
+                    "filename": doc['filename']
                 })
     
     results.sort(key=lambda x: x['score'], reverse=True)
     return results[:3]
 
 # ----------------------------
-# Search approved web domains
+# Search web domains
 # ----------------------------
 def search_web(question, keywords):
     results = []
-    
-    search_query = question
-    urls = ddg_search_approved(search_query, max_results=5)
+    urls = ddg_search_approved(question, max_results=4)
     
     for url in urls:
         try:
@@ -296,18 +328,19 @@ def search_web(question, keywords):
                 text = parser.get_text()
                 
                 if text and len(text) > 200:
+                    # Check relevance
                     text_lower = text.lower()
                     relevance = 0
                     for kw in keywords:
-                        relevance += text_lower.count(kw)
+                        relevance += text_lower.count(kw) * 5
                     
                     if relevance > 0:
-                        relevant_para = extract_relevant_paragraph(text, keywords)
-                        if relevant_para:
+                        relevant_sentences = extract_relevant_content(text, keywords)
+                        if relevant_sentences:
                             results.append({
                                 "title": domain_of(url),
                                 "url": url,
-                                "content": relevant_para,
+                                "content": ' '.join(relevant_sentences),
                                 "relevance": relevance,
                                 "type": "web"
                             })
@@ -319,99 +352,109 @@ def search_web(question, keywords):
     return results[:3]
 
 # ----------------------------
-# Generate synthesized answer
+# Generate ONE synthesized answer from ALL sources
 # ----------------------------
-def generate_answer(question, local_results, web_results, keywords):
-    """Synthesize a single coherent answer from all sources"""
+def generate_synthesized_answer(question, local_results, web_results, keywords):
+    """Combine all sources into ONE coherent answer"""
+    
+    # Collect all content
+    all_sentences = []
+    all_sources = []
+    
+    for r in local_results:
+        if r['content']:
+            # Split into sentences
+            sentences = re.split(r'(?<=[.!?])\s+', r['content'])
+            for sent in sentences:
+                if len(sent) > 30:
+                    all_sentences.append({
+                        "text": sent,
+                        "source": r['title'],
+                        "type": "local",
+                        "score": r['score']
+                    })
+            all_sources.append({"title": r['title'], "type": "local"})
+    
+    for r in web_results:
+        if r['content']:
+            sentences = re.split(r'(?<=[.!?])\s+', r['content'])
+            for sent in sentences:
+                if len(sent) > 30:
+                    all_sentences.append({
+                        "text": sent,
+                        "source": r['title'],
+                        "type": "web",
+                        "score": r['relevance']
+                    })
+            all_sources.append({"title": r['title'], "type": "web", "url": r.get('url', '')})
+    
+    if not all_sentences:
+        return None
+    
+    # Score sentences by relevance to question
+    question_lower = question.lower()
+    for sent in all_sentences:
+        sent_lower = sent['text'].lower()
+        relevance = 0
+        
+        # Check for exact phrase matches
+        if "black god" in question_lower and "black god" in sent_lower:
+            relevance += 1000
+        if "haashch" in question_lower and "haashch" in sent_lower:
+            relevance += 1000
+        if "hero twin" in question_lower and "hero twin" in sent_lower:
+            relevance += 1000
+        if "coyote" in question_lower and "coyote" in sent_lower:
+            relevance += 800
+        
+        # Check for keywords
+        for kw in keywords[:5]:
+            if kw in sent_lower:
+                relevance += 50
+        
+        sent['relevance'] = relevance
+    
+    # Sort by relevance
+    all_sentences.sort(key=lambda x: x['relevance'], reverse=True)
+    
+    # Take top unique sentences (avoid duplicates)
+    seen_text = set()
+    unique_sentences = []
+    for sent in all_sentences:
+        # Use first 50 chars as key for deduplication
+        key = sent['text'][:50]
+        if key not in seen_text:
+            seen_text.add(key)
+            unique_sentences.append(sent)
+    
+    # Build the answer (first 3-6 sentences)
+    answer_sentences = unique_sentences[:6]
+    answer_text = ' '.join([s['text'] for s in answer_sentences])
+    
+    # Clean up
+    answer_text = re.sub(r'\s+', ' ', answer_text)
+    if len(answer_text) > 1200:
+        answer_text = answer_text[:1200] + "..."
+    
+    # Build the output
     output = []
     output.append(f'<p><strong>📖 Question:</strong> {question}</p>')
     output.append('<hr>')
+    output.append('<p><strong>📖 Answer:</strong></p>')
+    output.append(f'<blockquote style="background:#f9f9f9;padding:20px;border-left:4px solid #2c5f2d;margin:10px 0;font-size:16px;line-height:1.6;">{answer_text}</blockquote>')
     
-    # Combine all content from all sources
-    all_content = []
+    # List sources
+    output.append('<hr>')
+    output.append('<p><strong>📚 Sources used to create this answer:</strong></p>')
+    output.append('<ul>')
+    for s in all_sources[:5]:
+        if s['type'] == 'local':
+            output.append(f'<li><strong>📄 {s["title"]}</strong> (Local Document)</li>')
+        else:
+            output.append(f'<li><strong>🌐 {s["title"]}</strong>: <a href="{s["url"]}" target="_blank">{s["url"]}</a></li>')
+    output.append('</ul>')
     
-    for r in local_results:
-        if r['content'] and len(r['content']) > 50:
-            all_content.append({
-                "text": r['content'],
-                "source": r['title'],
-                "type": "local",
-                "score": r['score']
-            })
-    
-    for r in web_results:
-        if r['content'] and len(r['content']) > 50:
-            all_content.append({
-                "text": r['content'],
-                "source": r['title'],
-                "url": r.get('url', ''),
-                "type": "web",
-                "score": r.get('relevance', 0)
-            })
-    
-    if not all_content:
-        output.append('<p><strong>📖 No information found in approved Diné sources.</strong></p>')
-        output.append('<p>Try asking about:</p>')
-        output.append('<ul>')
-        output.append('<li>Who are the Hero Twins?</li>')
-        output.append('<li>Who is Black God?</li>')
-        output.append('<li>Who is Coyote?</li>')
-        output.append('<li>What is k\'é?</li>')
-        output.append('</ul>')
-    else:
-        # Sort by score (best first)
-        all_content.sort(key=lambda x: x['score'], reverse=True)
-        
-        # Take the best content as the primary answer
-        best = all_content[0]
-        
-        # Build a synthesized answer
-        output.append('<p><strong>📖 Answer:</strong></p>')
-        
-        # Extract the most relevant sentences from the best content
-        sentences = re.split(r'(?<=[.!?])\s+', best['text'])
-        
-        # Take sentences that seem relevant to the question
-        relevant_sentences = []
-        question_lower = question.lower()
-        
-        for sent in sentences[:8]:
-            sent_lower = sent.lower()
-            if any(kw in sent_lower for kw in keywords[:5]):
-                relevant_sentences.append(sent)
-            elif len(relevant_sentences) < 2 and len(sent) > 40:
-                relevant_sentences.append(sent)
-        
-        if not relevant_sentences:
-            relevant_sentences = sentences[:4]
-        
-        answer_text = ' '.join(relevant_sentences)
-        if len(answer_text) > 1000:
-            answer_text = answer_text[:1000] + "..."
-        
-        output.append(f'<blockquote style="background:#f9f9f9;padding:15px;border-left:4px solid #2c5f2d;margin:10px 0;font-size:16px;line-height:1.6;">{answer_text}</blockquote>')
-        
-        # Add additional relevant info from other sources
-        if len(all_content) > 1:
-            output.append('<p><strong>📚 Additional information:</strong></p>')
-            for r in all_content[1:3]:
-                snippet = r['text'][:300]
-                if len(r['text']) > 300:
-                    snippet += "..."
-                output.append(f'<blockquote style="background:#f0f0f0;padding:10px;border-left:3px solid #95a5a6;margin:10px 0;font-size:14px;"><strong>From {r["source"]}:</strong><br>{snippet}</blockquote>')
-        
-        # List all sources
-        output.append('<hr>')
-        output.append('<p><strong>📚 Sources used:</strong></p>')
-        output.append('<ul>')
-        for r in all_content[:5]:
-            if r['type'] == 'local':
-                output.append(f'<li><strong>📄 {r["source"]}</strong> (Local Document)</li>')
-            else:
-                output.append(f'<li><strong>🌐 {r["source"]}</strong>: <a href="{r["url"]}" target="_blank">{r["url"]}</a></li>')
-        output.append('</ul>')
-        
-        output.append(f'<p style="font-size:12px; color:#666; margin-top:15px;">🔒 Search restricted to {len(APPROVED_DOMAINS)} approved Diné cultural domains + local documents.</p>')
+    output.append(f'<p style="font-size:12px; color:#666; margin-top:15px;">🔒 Search restricted to {len(APPROVED_DOMAINS)} approved Diné cultural domains + {len(LOCAL_DOCUMENTS)} local documents.</p>')
     
     return '\n'.join(output)
 
@@ -517,7 +560,7 @@ HTML_TEMPLATE = """
             margin-top: 20px;
             border-left: 4px solid #2c5f2d;
         }
-        .answer blockquote { margin: 10px 0; padding: 10px; background: #f0f0f0; border-left: 3px solid #2c5f2d; }
+        .answer blockquote { margin: 10px 0; }
         .fact-box {
             background: #fff3e0;
             padding: 15px;
@@ -635,9 +678,23 @@ def home():
             web_results = search_web(question, keywords)
             
             print(f"📚 Local results: {len(local_results)}")
-            print(f"🌐 Web results: {len(web_results)}")
+            for r in local_results:
+                print(f"   - {r['title']} (score: {r['score']})")
             
-            answer = generate_answer(question, local_results, web_results, keywords)
+            answer = generate_synthesized_answer(question, local_results, web_results, keywords)
+            
+            if not answer:
+                answer = """
+                <p><strong>📖 No information found in approved Diné sources.</strong></p>
+                <p>Try asking about:</p>
+                <ul>
+                    <li>Who are the Hero Twins?</li>
+                    <li>Who is Black God?</li>
+                    <li>Who is Coyote?</li>
+                    <li>What is k'é?</li>
+                    <li>Tell me about Navajo weaving</li>
+                </ul>
+                """
     
     return render_template_string(HTML_TEMPLATE, 
                                    question=question, 
