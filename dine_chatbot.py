@@ -71,6 +71,9 @@ APPROVED_DOMAINS = [
     "navajoculture.org",
     "traditionalnavajoteachings.org",
 ]
+
+USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15"
+
 # ----------------------------
 # LOCAL DOCUMENTS FOLDER
 # ----------------------------
@@ -141,7 +144,7 @@ def extract_keywords(question):
     
     # Combine, remove duplicates
     all_keywords = list(set(keywords + phrases))
-    print(f"🔍 Extracted keywords: {all_keywords[:8]}")  # Show first 8
+    print(f"🔍 Extracted keywords: {all_keywords[:8]}")
     return all_keywords
 
 # ----------------------------
@@ -230,6 +233,9 @@ def extract_relevant_paragraph(content, keywords):
         if len(para) < 100:
             continue
         para_lower = para.lower()
+        # Skip Gutenberg headers
+        if 'gutenberg' in para_lower or 'project gutenberg' in para_lower:
+            continue
         score = 0
         for kw in keywords:
             score += para_lower.count(kw) * 10
@@ -239,20 +245,13 @@ def extract_relevant_paragraph(content, keywords):
     
     if best_para:
         best_para = re.sub(r'\s+', ' ', best_para)
-        # Skip Gutenberg headers
-        if 'gutenberg' in best_para.lower() or 'project gutenberg' in best_para.lower():
-            # Find the next paragraph
-            for para in paragraphs:
-                if len(para) > 200 and 'gutenberg' not in para.lower():
-                    best_para = re.sub(r'\s+', ' ', para)
-                    break
         if len(best_para) > 800:
             best_para = best_para[:800] + "..."
         return best_para
     return None
 
 # ----------------------------
-# Search local documents (dynamic)
+# Search local documents
 # ----------------------------
 def search_local(question, keywords):
     results = []
@@ -280,12 +279,11 @@ def search_local(question, keywords):
     return results[:3]
 
 # ----------------------------
-# Search approved web domains (dynamic)
+# Search approved web domains
 # ----------------------------
 def search_web(question, keywords):
     results = []
     
-    # Use the question itself as search query
     search_query = question
     urls = ddg_search_approved(search_query, max_results=5)
     
@@ -298,7 +296,6 @@ def search_web(question, keywords):
                 text = parser.get_text()
                 
                 if text and len(text) > 200:
-                    # Check relevance
                     text_lower = text.lower()
                     relevance = 0
                     for kw in keywords:
@@ -322,32 +319,38 @@ def search_web(question, keywords):
     return results[:3]
 
 # ----------------------------
-# Generate answer
+# Generate synthesized answer
 # ----------------------------
 def generate_answer(question, local_results, web_results, keywords):
+    """Synthesize a single coherent answer from all sources"""
     output = []
     output.append(f'<p><strong>📖 Question:</strong> {question}</p>')
     output.append('<hr>')
     
-    # Show local document results first
-    if local_results:
-        output.append('<p><strong>📚 From approved Diné documents:</strong></p>')
-        for r in local_results:
-            output.append(f'<p><strong>📄 {r["title"]}</strong></p>')
-            output.append(f'<blockquote style="background:#f9f9f9;padding:12px;border-left:3px solid #2c5f2d;margin:10px 0;">{r["content"]}</blockquote>')
-        output.append('<hr>')
+    # Combine all content from all sources
+    all_content = []
     
-    # Show approved web results
-    if web_results:
-        output.append('<p><strong>🌐 From approved Diné websites:</strong></p>')
-        for r in web_results:
-            output.append(f'<p><strong>{r["title"]}</strong><br><a href="{r["url"]}" target="_blank">{r["url"]}</a></p>')
-            output.append(f'<blockquote style="background:#f0f0f0;padding:12px;border-left:3px solid #2c5f2d;margin:10px 0;">{r["content"]}</blockquote>')
+    for r in local_results:
+        if r['content'] and len(r['content']) > 50:
+            all_content.append({
+                "text": r['content'],
+                "source": r['title'],
+                "type": "local",
+                "score": r['score']
+            })
     
-    if not local_results and not web_results:
+    for r in web_results:
+        if r['content'] and len(r['content']) > 50:
+            all_content.append({
+                "text": r['content'],
+                "source": r['title'],
+                "url": r.get('url', ''),
+                "type": "web",
+                "score": r.get('relevance', 0)
+            })
+    
+    if not all_content:
         output.append('<p><strong>📖 No information found in approved Diné sources.</strong></p>')
-        output.append('<p>I searched for these keywords in your documents and approved websites:</p>')
-        output.append(f'<p style="background:#f0f0f0;padding:10px;border-radius:8px;"><code>{" | ".join(keywords[:8])}</code></p>')
         output.append('<p>Try asking about:</p>')
         output.append('<ul>')
         output.append('<li>Who are the Hero Twins?</li>')
@@ -355,6 +358,59 @@ def generate_answer(question, local_results, web_results, keywords):
         output.append('<li>Who is Coyote?</li>')
         output.append('<li>What is k\'é?</li>')
         output.append('</ul>')
+    else:
+        # Sort by score (best first)
+        all_content.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Take the best content as the primary answer
+        best = all_content[0]
+        
+        # Build a synthesized answer
+        output.append('<p><strong>📖 Answer:</strong></p>')
+        
+        # Extract the most relevant sentences from the best content
+        sentences = re.split(r'(?<=[.!?])\s+', best['text'])
+        
+        # Take sentences that seem relevant to the question
+        relevant_sentences = []
+        question_lower = question.lower()
+        
+        for sent in sentences[:8]:
+            sent_lower = sent.lower()
+            if any(kw in sent_lower for kw in keywords[:5]):
+                relevant_sentences.append(sent)
+            elif len(relevant_sentences) < 2 and len(sent) > 40:
+                relevant_sentences.append(sent)
+        
+        if not relevant_sentences:
+            relevant_sentences = sentences[:4]
+        
+        answer_text = ' '.join(relevant_sentences)
+        if len(answer_text) > 1000:
+            answer_text = answer_text[:1000] + "..."
+        
+        output.append(f'<blockquote style="background:#f9f9f9;padding:15px;border-left:4px solid #2c5f2d;margin:10px 0;font-size:16px;line-height:1.6;">{answer_text}</blockquote>')
+        
+        # Add additional relevant info from other sources
+        if len(all_content) > 1:
+            output.append('<p><strong>📚 Additional information:</strong></p>')
+            for r in all_content[1:3]:
+                snippet = r['text'][:300]
+                if len(r['text']) > 300:
+                    snippet += "..."
+                output.append(f'<blockquote style="background:#f0f0f0;padding:10px;border-left:3px solid #95a5a6;margin:10px 0;font-size:14px;"><strong>From {r["source"]}:</strong><br>{snippet}</blockquote>')
+        
+        # List all sources
+        output.append('<hr>')
+        output.append('<p><strong>📚 Sources used:</strong></p>')
+        output.append('<ul>')
+        for r in all_content[:5]:
+            if r['type'] == 'local':
+                output.append(f'<li><strong>📄 {r["source"]}</strong> (Local Document)</li>')
+            else:
+                output.append(f'<li><strong>🌐 {r["source"]}</strong>: <a href="{r["url"]}" target="_blank">{r["url"]}</a></li>')
+        output.append('</ul>')
+        
         output.append(f'<p style="font-size:12px; color:#666; margin-top:15px;">🔒 Search restricted to {len(APPROVED_DOMAINS)} approved Diné cultural domains + local documents.</p>')
     
     return '\n'.join(output)
@@ -487,12 +543,6 @@ HTML_TEMPLATE = """
             border-radius: 12px;
             margin-left: 8px;
         }
-        code {
-            background: #f0f0f0;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
     </style>
 </head>
 <body>
@@ -580,10 +630,7 @@ def home():
             print(f"📖 QUESTION: {question}")
             print(f"{'='*50}")
             
-            # Extract keywords dynamically from the question
             keywords = extract_keywords(question)
-            
-            # Search using the extracted keywords
             local_results = search_local(question, keywords)
             web_results = search_web(question, keywords)
             
