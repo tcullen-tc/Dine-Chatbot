@@ -13,13 +13,38 @@ DID_YOU_KNOW_FACTS = [
     "The Navajo language was used as a code during WWII by the famous Code Talkers - it was never broken!",
     "K'é (kinship) extends beyond blood relations to include all of creation.",
     "Hózhó is often translated as 'beauty' but encompasses harmony, balance, and wellness.",
-    "Traditional Navajo hogans are built with the door facing east to greet the morning sun.",
 ]
 
 # ----------------------------
-# DOCUMENTS FOLDER - HARDCODED TO YOUR PATH
+# DOCUMENTS FOLDER - Try multiple possible locations
 # ----------------------------
-DOCUMENTS_FOLDER = "/home/tony-cullen/dine_documents"
+def find_documents_folder():
+    """Try to find the documents folder in several possible locations"""
+    possible_paths = [
+        # Render possible paths
+        "/opt/render/project/src/dine_documents",
+        "/app/dine_documents",
+        "/tmp/dine_documents",
+        # Local development paths
+        os.path.join(os.path.dirname(__file__), "dine_documents"),
+        os.path.join(os.getcwd(), "dine_documents"),
+        # Your local path (won't work on Render but works locally)
+        "/home/tony-cullen/dine_documents",
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            print(f"✅ Found documents at: {path}")
+            return path
+    
+    # If no folder exists, create one in the current directory
+    fallback_path = os.path.join(os.getcwd(), "dine_documents")
+    os.makedirs(fallback_path, exist_ok=True)
+    print(f"📁 Created documents folder at: {fallback_path}")
+    print(f"   Please upload your .txt files here")
+    return fallback_path
+
+DOCUMENTS_FOLDER = find_documents_folder()
 
 def load_all_documents():
     """Load ALL text files from the documents folder"""
@@ -30,7 +55,7 @@ def load_all_documents():
         return documents
     
     txt_files = glob.glob(os.path.join(DOCUMENTS_FOLDER, "*.txt"))
-    print(f"📂 Found {len(txt_files)} text files")
+    print(f"📂 Found {len(txt_files)} text files in {DOCUMENTS_FOLDER}")
     
     for file_path in txt_files:
         try:
@@ -61,8 +86,6 @@ def find_answer_in_documents(question, documents):
         "black_god": ["black god", "haashch", "fire god", "haashch'ééshzhiní", "nightway"],
         "k'e": ["k'é", "k'e", "kinship", "clan", "family", "relative"],
         "weaving": ["weav", "weaver", "weaving", "blanket", "rug", "loom", "spider woman"],
-        "stars": ["star", "stars", "constellation", "pleiades", "coyote"],
-        "long_walk": ["long walk", "bosque redondo", "hweeldi", "1864"],
     }
     
     # Determine which topic this question is about
@@ -75,10 +98,6 @@ def find_answer_in_documents(question, documents):
                 break
         if detected_topic:
             break
-    
-    # If no specific topic detected, try to find any relevant document
-    if not detected_topic:
-        print(f"   No specific topic detected, searching all documents...")
     
     # Score each document
     scored_docs = []
@@ -102,18 +121,10 @@ def find_answer_in_documents(question, documents):
                 if count > 0:
                     score += count * 100
                     print(f"   📖 Found '{keyword}' {count} times in {doc['filename']}")
-        else:
-            # No specific topic - look for question words
-            words = [w for w in question_lower.split() if len(w) > 3]
-            for word in words:
-                count = content_lower.count(word)
-                if count > 0:
-                    score += count * 10
         
         if score > 0:
             scored_docs.append((score, doc))
     
-    # Sort by score
     scored_docs.sort(reverse=True, key=lambda x: x[0])
     
     results = []
@@ -143,11 +154,6 @@ def extract_relevant_text(doc, question):
         para_lower = para.lower()
         score = 0
         
-        # Count matches for question words
-        words = [w for w in question_lower.split() if len(w) > 3]
-        for word in words:
-            score += para_lower.count(word) * 5
-        
         # Special keywords boost
         special_keywords = ["hero twin", "monster slayer", "black god", "haashch", "k'é", "kinship"]
         for kw in special_keywords:
@@ -157,13 +163,11 @@ def extract_relevant_text(doc, question):
         if score > 0 or len(scored_paragraphs) < 2:
             scored_paragraphs.append((score, para))
     
-    # Sort by score
     scored_paragraphs.sort(reverse=True, key=lambda x: x[0])
     
     # Return top paragraphs
     result = []
     for score, para in scored_paragraphs[:4]:
-        # Clean up the paragraph
         para = re.sub(r'\s+', ' ', para)
         if len(para) > 800:
             para = para[:800] + "..."
@@ -171,9 +175,7 @@ def extract_relevant_text(doc, question):
     
     return result
 
-# ----------------------------
 # HTML Template
-# ----------------------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -346,7 +348,7 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <div class="footer">
-            🌄 Answers from your local Diné documents | 📁 {{ doc_count }} documents available
+            🌄 Answers from your local Diné documents | 📁 {{ doc_count }} documents loaded
         </div>
     </div>
     <script>
@@ -367,9 +369,7 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# ----------------------------
 # Load documents once at startup
-# ----------------------------
 print("\n" + "="*60)
 print("LOADING DOCUMENTS...")
 print("="*60)
@@ -392,11 +392,9 @@ def home():
                 print(f"QUESTION: {question}")
                 print(f"{'='*60}")
                 
-                # Search documents
                 matching_docs = find_answer_in_documents(question, ALL_DOCUMENTS)
                 
                 if matching_docs:
-                    # Build answer from matching documents
                     answer_parts = []
                     answer_parts.append(f'<p><strong>📖 Answer about: {question}</strong></p>')
                     answer_parts.append('<hr>')
@@ -405,7 +403,6 @@ def home():
                         source_name = doc['name']
                         answer_parts.append(f'<p><strong>📚 Source: {source_name}</strong> <span class="source-badge">Local Document</span></p>')
                         
-                        # Extract relevant text
                         relevant_text = extract_relevant_text(doc, question)
                         for text in relevant_text:
                             answer_parts.append(f'<blockquote>{text}</blockquote>')
@@ -413,20 +410,13 @@ def home():
                     
                     answer = '\n'.join(answer_parts)
                 else:
-                    answer = """
+                    answer = f"""
                         <p><strong>📖 No matching documents found.</strong></p>
                         <p>I couldn't find information about that topic in your local documents.</p>
-                        <p><strong>Try asking about:</strong></p>
-                        <ul>
-                            <li>Who are the Hero Twins?</li>
-                            <li>Who is Black God?</li>
-                            <li>What is k'é?</li>
-                            <li>Tell me about Navajo weaving</li>
-                        </ul>
-                        <p>Your documents folder contains these files:</p>
+                        <p><strong>Documents available ({len(ALL_DOCUMENTS)} files):</strong></p>
                         <ul>
                     """
-                    for doc in ALL_DOCUMENTS[:10]:
+                    for doc in ALL_DOCUMENTS[:15]:
                         answer += f"<li>{doc['name']}</li>"
                     answer += "</ul>"
                     
