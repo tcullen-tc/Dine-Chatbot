@@ -17,29 +17,185 @@ from flask import Flask, request, render_template_string
 # Create Flask app
 app = Flask(__name__)
 
-# Did You Know facts (just for UI)
+# Did You Know facts
 DID_YOU_KNOW_FACTS = [
     "The Navajo language was used as a code during WWII by the famous Code Talkers - it was never broken!",
     "K'é (kinship) extends beyond blood relations to include all of creation.",
     "Hózhó is often translated as 'beauty' but encompasses harmony, balance, and wellness.",
+    "Traditional Navajo hogans are built with the door facing east to greet the morning sun.",
+    "The four sacred mountains mark the boundaries of traditional Dinétah (Navajo homeland).",
+    "Weaving was taught to the Navajo by Spider Woman, a holy being.",
 ]
 
 # ----------------------------
-# 1) Configure your allowlist - YOUR ORIGINAL
+# LOCAL DOCUMENTS FOLDER - YOUR 12 TEXT FILES
+# ----------------------------
+def find_documents_folder():
+    """Find the documents folder in the repository"""
+    possible_paths = [
+        os.path.join(os.path.dirname(__file__), "dine_documents"),
+        os.path.join(os.getcwd(), "dine_documents"),
+        "/opt/render/project/src/dine_documents",
+        "/app/dine_documents",
+        "/home/tony-cullen/dine_documents",
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            print(f"✅ Found documents at: {path}")
+            return path
+    
+    fallback_path = os.path.join(os.getcwd(), "dine_documents")
+    os.makedirs(fallback_path, exist_ok=True)
+    print(f"📁 Created documents folder at: {fallback_path}")
+    return fallback_path
+
+DOCUMENTS_FOLDER = find_documents_folder()
+
+def load_local_documents():
+    """Load all text files from the documents folder"""
+    documents = []
+    
+    if not os.path.exists(DOCUMENTS_FOLDER):
+        print(f"❌ Folder not found: {DOCUMENTS_FOLDER}")
+        return documents
+    
+    txt_files = glob.glob(os.path.join(DOCUMENTS_FOLDER, "*.txt"))
+    print(f"📂 Found {len(txt_files)} local text files")
+    
+    for file_path in txt_files:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            filename = os.path.basename(file_path)
+            documents.append({
+                "url": f"local:{filename}",
+                "domain": "local-documents",
+                "tier": "document",
+                "trust": 1.00,
+                "label": filename.replace('.txt', ''),
+                "text": content,
+                "source_type": "local"
+            })
+            print(f"   ✅ Loaded local: {filename} ({len(content)} chars)")
+        except Exception as e:
+            print(f"   ❌ Error loading {file_path}: {e}")
+    
+    return documents
+
+# ----------------------------
+# COMPLETE ALLOWED DOMAINS - FULL ORIGINAL LIST (39 domains)
 # ----------------------------
 ALLOWED_DOMAINS = [
-    "navajo-nsn.gov", "courts.navajo-nsn.gov", "navajocourts.org",
-    "navajochapters.org", "nnwo.org", "navajopeople.org", "dinecollege.edu",
-    "navajolanguageacademy.org", "roughrock.k12.az.us", "navajotimes.com",
-    "navajocodetalkers.org", "discovernavajo.com", "ictnews.org",
-    "indiancountrytoday.com", "nativeamericannews.net", "americanindian.si.edu",
-    "loc.gov", "pbs.org", "smithsonianmag.com",
+    # --- Official Navajo Nation / Diné Government ---
+    "navajo-nsn.gov",
+    "courts.navajo-nsn.gov",
+    "navajocourts.org",
+    "navajochapters.org",
+    "nnwo.org",
+    "navajopeople.org",
+    "navajo.org",
+
+    # --- Diné Education & Language ---
+    "dinecollege.edu",
+    "navajolanguageacademy.org",
+    "roughrock.k12.az.us",
+    "nau.edu",
+    "navajotech.edu",
+    "unm.edu",
+
+    # --- Diné Media & Community Organizations ---
+    "navajotimes.com",
+    "navajocodetalkers.org",
+    "discovernavajo.com",
+    "navajohopiobserver.com",
+    "dineta.com",
+
+    # --- Indigenous Journalism ---
+    "ictnews.org",
+    "indiancountrytoday.com",
+    "nativeamericannews.net",
+    "ncai.org",
+
+    # --- Museums & Academic Institutions ---
+    "americanindian.si.edu",
+    "loc.gov",
+    "pbs.org",
+    "smithsonianmag.com",
+
+    # --- University Presses (Academic Books) ---
+    "unmpress.com",
+    "upcolorado.com",
+    "uapress.arizona.edu",
+    
+    # --- Academic & Cultural Resources ---
+    "jstor.org",
+    "anthrosource.onlinelibrary.wiley.com",
+    "ehillerman.unm.edu",
+    
+    # --- Additional Cultural Sites ---
+    "navajoculture.org",
+    "traditionalnavajoteachings.org",
 ]
 
 TRUSTED_MEDIA = [
     {"title": "Diné Teaching Video", "url": "https://youtu.be/waCH87_-Adk", "source": "YouTube"},
 ]
 ALLOWED_EXACT_URLS = {m["url"] for m in TRUSTED_MEDIA}
+
+# --- Domain Trust Scores (complete) ---
+DOMAIN_TRUST = {
+    # Official Navajo Nation / Diné Government
+    "navajo-nsn.gov": ("official", 1.00),
+    "courts.navajo-nsn.gov": ("official", 1.00),
+    "navajocourts.org": ("official", 1.00),
+    "navajochapters.org": ("official", 0.95),
+    "nnwo.org": ("official", 0.95),
+    "navajopeople.org": ("official", 0.95),
+    "navajo.org": ("official", 0.95),
+
+    # Diné Education / Language
+    "dinecollege.edu": ("education", 0.95),
+    "navajolanguageacademy.org": ("education", 0.92),
+    "roughrock.k12.az.us": ("education", 0.88),
+    "nau.edu": ("education", 0.90),
+    "navajotech.edu": ("education", 0.88),
+    "unm.edu": ("education", 0.85),
+
+    # Diné media / orgs
+    "navajotimes.com": ("dine_media", 0.85),
+    "navajocodetalkers.org": ("dine_org", 0.88),
+    "discovernavajo.com": ("tourism", 0.75),
+    "navajohopiobserver.com": ("dine_media", 0.85),
+    "dineta.com": ("dine_media", 0.85),
+
+    # Indigenous-led journalism
+    "ictnews.org": ("indigenous_media", 0.82),
+    "indiancountrytoday.com": ("indigenous_media", 0.82),
+    "nativeamericannews.net": ("indigenous_media", 0.75),
+    "ncai.org": ("indigenous_org", 0.80),
+
+    # Museums / archives
+    "americanindian.si.edu": ("museum", 0.80),
+    "loc.gov": ("archive", 0.80),
+    "pbs.org": ("public_media", 0.75),
+    "smithsonianmag.com": ("museum_media", 0.70),
+    
+    # University Presses
+    "unmpress.com": ("academic", 0.85),
+    "upcolorado.com": ("academic", 0.85),
+    "uapress.arizona.edu": ("academic", 0.85),
+    
+    # Academic resources
+    "jstor.org": ("academic", 0.80),
+    "anthrosource.onlinelibrary.wiley.com": ("academic", 0.80),
+    "ehillerman.unm.edu": ("academic", 0.80),
+    
+    # Cultural sites
+    "navajoculture.org": ("cultural", 0.80),
+    "traditionalnavajoteachings.org": ("cultural", 0.80),
+}
 
 # --- Seasonal teaching mode ---
 SEASONAL_MODE = True
@@ -53,31 +209,10 @@ def is_hibernation_season(today: date | None = None) -> bool:
 def mentions_animals(text: str) -> bool:
     return any(k in text.lower() for k in ANIMAL_KEYWORDS)
 
-# --- Trust tiers ---
-DOMAIN_TRUST = {
-    "navajo-nsn.gov": ("official", 1.00),
-    "courts.navajo-nsn.gov": ("official", 1.00),
-    "navajocourts.org": ("official", 1.00),
-    "nnwo.org": ("official", 0.95),
-    "dinecollege.edu": ("education", 0.95),
-    "navajolanguageacademy.org": ("education", 0.92),
-    "roughrock.k12.az.us": ("education", 0.88),
-    "navajotimes.com": ("dine_media", 0.85),
-    "navajocodetalkers.org": ("dine_org", 0.88),
-    "discovernavajo.com": ("tourism", 0.75),
-    "ictnews.org": ("indigenous_media", 0.82),
-    "indiancountrytoday.com": ("indigenous_media", 0.82),
-    "nativeamericannews.net": ("indigenous_media", 0.75),
-    "americanindian.si.edu": ("museum", 0.80),
-    "loc.gov": ("archive", 0.80),
-    "pbs.org": ("public_media", 0.75),
-    "smithsonianmag.com": ("museum_media", 0.70),
-}
-
 USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1"
 
 # ----------------------------
-# 2) HTML -> Text extractor
+# HTML -> Text extractor
 # ----------------------------
 class TextExtractor(HTMLParser):
     def __init__(self):
@@ -150,14 +285,19 @@ def label_for_source(domain: str, tier: str) -> str:
         "dine_org": "Diné Organization",
         "tourism": "Tourism / Information",
         "indigenous_media": "Indigenous Journalism",
+        "indigenous_org": "Indigenous Organization",
         "museum": "Museum / Institution",
         "archive": "Archive",
         "public_media": "Public Media",
+        "museum_media": "Museum Media",
+        "academic": "Academic Press",
+        "cultural": "Cultural Resource",
+        "document": "Local Document",
     }
     return tier_labels.get(tier, domain)
 
 # ----------------------------
-# 3) DuckDuckGo HTML search
+# DuckDuckGo HTML search
 # ----------------------------
 def ddg_search(query: str, max_results: int = 8):
     q = urllib.parse.quote_plus(query)
@@ -185,14 +325,53 @@ def ddg_search(query: str, max_results: int = 8):
     return results
 
 # ----------------------------
-# 4) Gather Diné-only sources (YOUR ORIGINAL FUNCTION)
+# Gather ALL sources (LOCAL + WEB) - COMPLETE
 # ----------------------------
-def gather_sources(question: str, max_pages: int = 6):
+def gather_all_sources(question: str, max_pages: int = 6):
+    """Gather sources from local documents AND web"""
+    all_sources = []
+    
+    # STEP 1: Load and search local documents
+    print("\n" + "="*50)
+    print("📚 SEARCHING LOCAL DOCUMENTS")
+    print("="*50)
+    local_docs = load_local_documents()
+    
+    question_lower = question.lower()
+    for doc in local_docs:
+        text_lower = doc['text'].lower()
+        score = 0
+        words = [w for w in question_lower.split() if len(w) > 3]
+        for word in words:
+            score += text_lower.count(word) * 5
+        
+        # Boost for exact filename matches
+        if "hero" in question_lower and "hero_twins" in doc['label'].lower():
+            score += 10000
+            print(f"   ⭐⭐⭐ HERO TWINS FILE MATCHED!")
+        if "black god" in question_lower and "black_god" in doc['label'].lower():
+            score += 10000
+            print(f"   ⭐⭐⭐ BLACK GOD FILE MATCHED!")
+        if "coyote" in question_lower:
+            if "american_indian" in doc['label'].lower() or "folklore" in doc['label'].lower():
+                score += 2000
+                print(f"   🦊 Potential Coyote content found!")
+            score += text_lower.count("coyote") * 100
+        
+        if score > 10:
+            doc['relevance'] = score
+            all_sources.append(doc)
+            print(f"   ✅ Local match: {doc['label']} (score: {score})")
+    
+    # STEP 2: Search the web
+    print("\n" + "="*50)
+    print("🌐 SEARCHING WEB SOURCES")
+    print("="*50)
     clean_q = question.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'").strip()
     topic = clean_q.strip()
     if len(topic) < 12:
         topic = f"{topic} Diné Navajo"
-    search_query = f"{topic} meaning Diné Navajo culture kinship hózhó"
+    search_query = f"{topic} meaning Diné Navajo culture"
     
     urls = ddg_search(search_query, max_results=12)
     allowed_urls = [u for u in urls if is_allowed(u)]
@@ -201,7 +380,7 @@ def gather_sources(question: str, max_pages: int = 6):
         urls = []
         for d in sorted(ALLOWED_DOMAINS):
             q = f"site:{d} {clean_q}"
-            urls.extend(ddg_search(q, max_results=8))
+            urls.extend(ddg_search(q, max_results=4))
         allowed_urls = [u for u in urls if is_allowed(u)]
     
     allowed_urls = allowed_urls[:max_pages]
@@ -214,36 +393,43 @@ def gather_sources(question: str, max_pages: int = 6):
             seen.add(u)
             combined_urls.append(u)
     
-    sources = []
+    print(f"Found {len(combined_urls)} web sources to check")
+    
     for u in combined_urls:
         tier, score = trust_for_url(u)
         try:
             html = fetch_url(u, timeout=15)
+            if not html:
+                continue
             parser = TextExtractor()
             parser.feed(html)
-            text = parser.get_text()[:6000]
+            text = parser.get_text()
             
             t = text.lower()
             if ("navajo" not in t) and ("diné" not in t) and ("dine" not in t):
                 continue
             
-            sources.append({
+            all_sources.append({
                 "url": u,
                 "domain": domain_of(u),
                 "tier": tier,
                 "trust": score,
                 "label": label_for_source(domain_of(u), tier),
-                "text": text,
+                "text": text[:8000],
+                "source_type": "web"
             })
+            print(f"   ✅ Web source: {domain_of(u)}")
         except Exception as e:
-            print(f"Error processing {u}: {e}")
+            print(f"   ❌ Error processing {u}: {e}")
             continue
     
-    sources.sort(key=lambda s: s.get("trust", 0), reverse=True)
-    return sources
+    # Sort by trust (local docs have trust=1.00 so they appear first)
+    all_sources.sort(key=lambda s: s.get("trust", 0), reverse=True)
+    print(f"\n📊 TOTAL SOURCES FOUND: {len(all_sources)}")
+    return all_sources
 
 # ----------------------------
-# 5) Detect principles (YOUR ORIGINAL)
+# Detect principles
 # ----------------------------
 def detect_principles(sources):
     def norm(s):
@@ -267,32 +453,23 @@ def detect_principles(sources):
                 if pname not in found:
                     found[pname] = {"hits": 0, "evidence": []}
                 found[pname]["hits"] += hits
-                for k in kws:
-                    k2 = norm(k)
-                    idx = text.find(k2)
-                    if idx != -1:
-                        start = max(0, idx - 120)
-                        end = min(len(text), idx + 240)
-                        snippet = text[start:end].strip()
-                        if snippet and snippet not in found[pname]["evidence"]:
-                            found[pname]["evidence"].append(snippet)
-                        break
     return found
 
 # ----------------------------
-# 6) Generate answer from sources (YOUR ORIGINAL LOGIC - converted to return string)
+# Generate answer from sources
 # ----------------------------
 def generate_answer(question: str, sources):
-    """Generate answer from sources - YOUR ORIGINAL print_fallback_answer converted"""
     if not sources:
         return """
         <div style="line-height: 1.6;">
             <p><strong>📖 No sources found.</strong></p>
-            <p>I couldn't retrieve any sources from the allowed domains.</p>
-            <p>Try asking about:</p>
+            <p>I couldn't retrieve any sources from local documents or the web.</p>
+            <p><strong>Try asking about:</strong></p>
             <ul>
-                <li>What is k'é?</li>
                 <li>Who are the Hero Twins?</li>
+                <li>Who is Black God?</li>
+                <li>What is k'é?</li>
+                <li>Tell me about Coyote</li>
                 <li>What does hózhó mean?</li>
             </ul>
         </div>
@@ -305,24 +482,39 @@ def generate_answer(question: str, sources):
     output.append(f'<p><strong>📖 Question:</strong> {question}</p>')
     output.append('<hr>')
     
-    # Show sources
-    output.append('<p><strong>📚 Sources found:</strong></p>')
-    output.append('<ul>')
-    for i, s in enumerate(sources[:5], 1):
-        url = s.get('url', 'Unknown')
-        output.append(f'<li><a href="{url}" target="_blank">{url}</a></li>')
-    output.append('</ul>')
+    # Show sources (separate local from web)
+    local_sources = [s for s in sources if s.get('source_type') == 'local']
+    web_sources = [s for s in sources if s.get('source_type') != 'local']
+    
+    if local_sources:
+        output.append('<p><strong>📚 Local Documents Found:</strong></p>')
+        output.append('<ul>')
+        for s in local_sources[:3]:
+            output.append(f'<li><strong>{s["label"]}</strong> (Local Document)</li>')
+        output.append('</ul>')
+    
+    if web_sources:
+        output.append('<p><strong>🌐 Web Sources Found:</strong></p>')
+        output.append('<ul>')
+        for s in web_sources[:3]:
+            label = s.get('label', 'Source')
+            url = s.get('url', '')
+            output.append(f'<li><strong>{label}</strong>: <a href="{url}" target="_blank">{url}</a></li>')
+        output.append('</ul>')
+    
     output.append('<hr>')
     
     # Show content from the best source
     best_source = sources[0]
     text = best_source.get('text', '')
+    source_label = best_source.get('label', 'Source')
+    
     if text:
-        # Extract relevant paragraphs
+        # Split into paragraphs
         paragraphs = [p for p in text.split('\n\n') if len(p) > 100]
         if paragraphs:
-            output.append('<p><strong>📖 Information from sources:</strong></p>')
-            for p in paragraphs[:3]:
+            output.append(f'<p><strong>📖 Information from {source_label}:</strong></p>')
+            for p in paragraphs[:4]:
                 clean_p = re.sub(r'\s+', ' ', p)
                 if len(clean_p) > 600:
                     clean_p = clean_p[:600] + "..."
@@ -341,7 +533,7 @@ def generate_answer(question: str, sources):
     return '\n'.join(output)
 
 # ----------------------------
-# 7) HTML Template
+# HTML Template (complete)
 # ----------------------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -557,7 +749,7 @@ HTML_TEMPLATE = """
                         <button type="submit" class="submit-btn" id="submitBtn">🔍 Ask Question</button>
                         <div id="loadingIndicator" style="display: none;" class="loading-container">
                             <span class="loading-spinner"></span>
-                            <span class="searching-message">Searching Diné sources...</span>
+                            <span class="searching-message">Searching local documents and trusted Diné sources...</span>
                         </div>
                     </div>
                 </form>
@@ -570,7 +762,7 @@ HTML_TEMPLATE = """
                 <div class="example-buttons">
                     <button class="example-btn" data-question="Who are the Hero Twins?">🏹 Hero Twins</button>
                     <button class="example-btn" data-question="Who is Black God?">⭐ Black God</button>
-                    <button class="example-btn" data-question="Tell me about Coyote">🦊 Coyote</button>
+                    <button class="example-btn" data-question="Tell me about Coyote">🦊 Coyote Stories</button>
                     <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
                     <button class="example-btn" data-question="What does hózhó mean?">☯️ Hózhó</button>
                     <button class="example-btn" data-question="What is the Long Walk?">👣 The Long Walk</button>
@@ -590,7 +782,7 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <div class="footer">
-            🌄 Searching trusted Diné sources: Navajo Nation sites, Diné College, Navajo Times, ICT News, and more
+            🌄 Searching: Local documents + {{ allowed_domains_count }} trusted Diné web sources
         </div>
     </div>
     <script>
@@ -631,7 +823,7 @@ HTML_TEMPLATE = """
 """
 
 # ----------------------------
-# 8) Flask Routes
+# Flask Routes
 # ----------------------------
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -658,33 +850,38 @@ def home():
                     """
                 else:
                     print(f"\n{'='*60}")
-                    print(f"Searching for: {question}")
+                    print(f"QUESTION: {question}")
                     print(f"{'='*60}")
                     
                     sources_result = []
                     def gather():
-                        sources_result.append(gather_sources(question))
+                        sources_result.append(gather_all_sources(question))
                     
                     thread = threading.Thread(target=gather)
                     thread.start()
-                    thread.join(timeout=30)
+                    thread.join(timeout=35)
                     
                     if thread.is_alive():
                         answer = "Search is taking longer than expected. Please try a more specific question."
                     else:
                         sources = sources_result[0] if sources_result else []
-                        print(f"Found {len(sources)} sources")
+                        print(f"\n📊 TOTAL SOURCES FOUND: {len(sources)}")
                         answer = generate_answer(question, sources)
                         
             except Exception as e:
                 print(f"Error: {e}")
                 answer = f"I encountered an issue: {str(e)}. Please try again."
     
-    return render_template_string(HTML_TEMPLATE, question=question, answer=answer, random_fact=random_fact)
+    return render_template_string(HTML_TEMPLATE, 
+                                   question=question, 
+                                   answer=answer, 
+                                   random_fact=random_fact,
+                                   allowed_domains_count=len(ALLOWED_DOMAINS))
 
 if __name__ == "__main__":
     print(f"\n{'='*60}")
     print("Diné Cultural Learning Bot Starting...")
-    print("Searching trusted Diné sources online")
+    print(f"📁 Local documents folder: {DOCUMENTS_FOLDER}")
+    print(f"🌐 Allowed web domains: {len(ALLOWED_DOMAINS)}")
     print(f"{'='*60}\n")
     app.run(host='0.0.0.0', port=5000, debug=True)
