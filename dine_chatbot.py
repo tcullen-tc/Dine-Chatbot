@@ -1,11 +1,20 @@
 import re
+import sys
+import time
+import json
+import urllib.parse
+import urllib.request
+from html.parser import HTMLParser
+from datetime import datetime, date
+from typing import List, Dict, Any, Optional, Tuple, Set
+import io
+import threading
+import random
 import os
 import glob
-import random
-import threading
-from datetime import datetime, date
 from flask import Flask, request, render_template_string
 
+# Create Flask app
 app = Flask(__name__)
 
 # Did You Know facts
@@ -13,22 +22,21 @@ DID_YOU_KNOW_FACTS = [
     "The Navajo language was used as a code during WWII by the famous Code Talkers - it was never broken!",
     "K'é (kinship) extends beyond blood relations to include all of creation.",
     "Hózhó is often translated as 'beauty' but encompasses harmony, balance, and wellness.",
+    "Traditional Navajo hogans are built with the door facing east to greet the morning sun.",
+    "The four sacred mountains mark the boundaries of traditional Dinétah (Navajo homeland).",
+    "Weaving was taught to the Navajo by Spider Woman, a holy being.",
 ]
 
 # ----------------------------
-# DOCUMENTS FOLDER - Try multiple possible locations
+# LOCAL DOCUMENTS FOLDER - YOUR 12 TEXT FILES
 # ----------------------------
 def find_documents_folder():
-    """Try to find the documents folder in several possible locations"""
+    """Find the documents folder in the repository"""
     possible_paths = [
-        # Render possible paths
-        "/opt/render/project/src/dine_documents",
-        "/app/dine_documents",
-        "/tmp/dine_documents",
-        # Local development paths
         os.path.join(os.path.dirname(__file__), "dine_documents"),
         os.path.join(os.getcwd(), "dine_documents"),
-        # Your local path (won't work on Render but works locally)
+        "/opt/render/project/src/dine_documents",
+        "/app/dine_documents",
         "/home/tony-cullen/dine_documents",
     ]
     
@@ -37,17 +45,15 @@ def find_documents_folder():
             print(f"✅ Found documents at: {path}")
             return path
     
-    # If no folder exists, create one in the current directory
     fallback_path = os.path.join(os.getcwd(), "dine_documents")
     os.makedirs(fallback_path, exist_ok=True)
     print(f"📁 Created documents folder at: {fallback_path}")
-    print(f"   Please upload your .txt files here")
     return fallback_path
 
 DOCUMENTS_FOLDER = find_documents_folder()
 
-def load_all_documents():
-    """Load ALL text files from the documents folder"""
+def load_local_documents():
+    """Load all text files from the documents folder"""
     documents = []
     
     if not os.path.exists(DOCUMENTS_FOLDER):
@@ -55,7 +61,7 @@ def load_all_documents():
         return documents
     
     txt_files = glob.glob(os.path.join(DOCUMENTS_FOLDER, "*.txt"))
-    print(f"📂 Found {len(txt_files)} text files in {DOCUMENTS_FOLDER}")
+    print(f"📂 Found {len(txt_files)} local text files")
     
     for file_path in txt_files:
         try:
@@ -64,118 +70,471 @@ def load_all_documents():
             
             filename = os.path.basename(file_path)
             documents.append({
-                "name": filename.replace('.txt', ''),
-                "filename": filename,
-                "content": content,
-                "size": len(content)
+                "url": f"local:{filename}",
+                "domain": "local-documents",
+                "tier": "document",
+                "trust": 1.00,
+                "label": filename.replace('.txt', ''),
+                "text": content,
+                "source_type": "local"
             })
-            print(f"   ✅ Loaded: {filename} ({len(content)} chars)")
+            print(f"   ✅ Loaded local: {filename} ({len(content)} chars)")
         except Exception as e:
             print(f"   ❌ Error loading {file_path}: {e}")
     
     return documents
 
-def find_answer_in_documents(question, documents):
-    """Search through documents for answers"""
-    question_lower = question.lower()
-    print(f"\n🔍 Searching for: '{question_lower}'")
+# ----------------------------
+# COMPLETE ALLOWED DOMAINS - FULL ORIGINAL LIST (39 domains)
+# ----------------------------
+ALLOWED_DOMAINS = [
+    # --- Official Navajo Nation / Diné Government ---
+    "navajo-nsn.gov",
+    "courts.navajo-nsn.gov",
+    "navajocourts.org",
+    "navajochapters.org",
+    "nnwo.org",
+    "navajopeople.org",
+    "navajo.org",
+
+    # --- Diné Education & Language ---
+    "dinecollege.edu",
+    "navajolanguageacademy.org",
+    "roughrock.k12.az.us",
+    "nau.edu",
+    "navajotech.edu",
+    "unm.edu",
+
+    # --- Diné Media & Community Organizations ---
+    "navajotimes.com",
+    "navajocodetalkers.org",
+    "discovernavajo.com",
+    "navajohopiobserver.com",
+    "dineta.com",
+
+    # --- Indigenous Journalism ---
+    "ictnews.org",
+    "indiancountrytoday.com",
+    "nativeamericannews.net",
+    "ncai.org",
+
+    # --- Museums & Academic Institutions ---
+    "americanindian.si.edu",
+    "loc.gov",
+    "pbs.org",
+    "smithsonianmag.com",
+
+    # --- University Presses (Academic Books) ---
+    "unmpress.com",
+    "upcolorado.com",
+    "uapress.arizona.edu",
     
-    # Define keywords for different topics
-    topic_keywords = {
-        "hero_twins": ["hero twin", "hero twins", "monster slayer", "born for water", "naayéé", "neizghání", "yé'iitsoh"],
-        "black_god": ["black god", "haashch", "fire god", "haashch'ééshzhiní", "nightway"],
-        "k'e": ["k'é", "k'e", "kinship", "clan", "family", "relative"],
-        "weaving": ["weav", "weaver", "weaving", "blanket", "rug", "loom", "spider woman"],
+    # --- Academic & Cultural Resources ---
+    "jstor.org",
+    "anthrosource.onlinelibrary.wiley.com",
+    "ehillerman.unm.edu",
+    
+    # --- Additional Cultural Sites ---
+    "navajoculture.org",
+    "traditionalnavajoteachings.org",
+]
+
+TRUSTED_MEDIA = [
+    {"title": "Diné Teaching Video", "url": "https://youtu.be/waCH87_-Adk", "source": "YouTube"},
+]
+ALLOWED_EXACT_URLS = {m["url"] for m in TRUSTED_MEDIA}
+
+# --- Domain Trust Scores (complete) ---
+DOMAIN_TRUST = {
+    # Official Navajo Nation / Diné Government
+    "navajo-nsn.gov": ("official", 1.00),
+    "courts.navajo-nsn.gov": ("official", 1.00),
+    "navajocourts.org": ("official", 1.00),
+    "navajochapters.org": ("official", 0.95),
+    "nnwo.org": ("official", 0.95),
+    "navajopeople.org": ("official", 0.95),
+    "navajo.org": ("official", 0.95),
+
+    # Diné Education / Language
+    "dinecollege.edu": ("education", 0.95),
+    "navajolanguageacademy.org": ("education", 0.92),
+    "roughrock.k12.az.us": ("education", 0.88),
+    "nau.edu": ("education", 0.90),
+    "navajotech.edu": ("education", 0.88),
+    "unm.edu": ("education", 0.85),
+
+    # Diné media / orgs
+    "navajotimes.com": ("dine_media", 0.85),
+    "navajocodetalkers.org": ("dine_org", 0.88),
+    "discovernavajo.com": ("tourism", 0.75),
+    "navajohopiobserver.com": ("dine_media", 0.85),
+    "dineta.com": ("dine_media", 0.85),
+
+    # Indigenous-led journalism
+    "ictnews.org": ("indigenous_media", 0.82),
+    "indiancountrytoday.com": ("indigenous_media", 0.82),
+    "nativeamericannews.net": ("indigenous_media", 0.75),
+    "ncai.org": ("indigenous_org", 0.80),
+
+    # Museums / archives
+    "americanindian.si.edu": ("museum", 0.80),
+    "loc.gov": ("archive", 0.80),
+    "pbs.org": ("public_media", 0.75),
+    "smithsonianmag.com": ("museum_media", 0.70),
+    
+    # University Presses
+    "unmpress.com": ("academic", 0.85),
+    "upcolorado.com": ("academic", 0.85),
+    "uapress.arizona.edu": ("academic", 0.85),
+    
+    # Academic resources
+    "jstor.org": ("academic", 0.80),
+    "anthrosource.onlinelibrary.wiley.com": ("academic", 0.80),
+    "ehillerman.unm.edu": ("academic", 0.80),
+    
+    # Cultural sites
+    "navajoculture.org": ("cultural", 0.80),
+    "traditionalnavajoteachings.org": ("cultural", 0.80),
+}
+
+# --- Seasonal teaching mode ---
+SEASONAL_MODE = True
+HIBERNATION_MONTHS = {11, 12, 1, 2, 3}
+ANIMAL_KEYWORDS = ["animal", "bear", "coyote", "wolf", "fox", "deer", "elk", "moose", "snake"]
+
+def is_hibernation_season(today: date | None = None) -> bool:
+    today = today or datetime.now().date()
+    return today.month in HIBERNATION_MONTHS
+
+def mentions_animals(text: str) -> bool:
+    return any(k in text.lower() for k in ANIMAL_KEYWORDS)
+
+USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1"
+
+# ----------------------------
+# HTML -> Text extractor
+# ----------------------------
+class TextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._chunks = []
+        self._skip = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "noscript"):
+            self._skip = True
+        if tag in ("p", "br", "div", "li", "h1", "h2", "h3"):
+            self._chunks.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "noscript"):
+            self._skip = False
+        if tag in ("p", "div", "li"):
+            self._chunks.append("\n")
+
+    def handle_data(self, data):
+        if not self._skip:
+            text = data.strip()
+            if text:
+                self._chunks.append(text + " ")
+
+    def get_text(self):
+        text = "".join(self._chunks)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = re.sub(r"[ \t]{2,}", " ", text)
+        return text.strip()
+
+def fetch_url(url: str, timeout: int = 15) -> str:
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            charset = resp.headers.get_content_charset() or "utf-8"
+            return resp.read().decode(charset, errors="ignore")
+    except Exception as e:
+        print(f"Error fetching {url}: {e}")
+        return ""
+
+def domain_of(url: str) -> str:
+    try:
+        return urllib.parse.urlparse(url).netloc.lower().lstrip("www.")
+    except:
+        return ""
+
+def is_allowed(url: str) -> bool:
+    if url in ALLOWED_EXACT_URLS:
+        return True
+    d = domain_of(url)
+    return any(d == ad or d.endswith("." + ad) for ad in ALLOWED_DOMAINS)
+
+def trust_for_url(url: str) -> tuple:
+    host = domain_of(url)
+    best = ("other", 0.50)
+    best_len = 0
+    for d, (tier, score) in DOMAIN_TRUST.items():
+        if host == d or host.endswith("." + d):
+            if len(d) > best_len:
+                best = (tier, score)
+                best_len = len(d)
+    return best
+
+def label_for_source(domain: str, tier: str) -> str:
+    tier_labels = {
+        "official": "Navajo Nation (Official)",
+        "education": "Diné Education",
+        "dine_media": "Diné Media",
+        "dine_org": "Diné Organization",
+        "tourism": "Tourism / Information",
+        "indigenous_media": "Indigenous Journalism",
+        "indigenous_org": "Indigenous Organization",
+        "museum": "Museum / Institution",
+        "archive": "Archive",
+        "public_media": "Public Media",
+        "museum_media": "Museum Media",
+        "academic": "Academic Press",
+        "cultural": "Cultural Resource",
+        "document": "Local Document",
     }
-    
-    # Determine which topic this question is about
-    detected_topic = None
-    for topic, keywords in topic_keywords.items():
-        for keyword in keywords:
-            if keyword in question_lower:
-                detected_topic = topic
-                print(f"   🎯 Detected topic: {topic} (matched keyword: '{keyword}')")
-                break
-        if detected_topic:
-            break
-    
-    # Score each document
-    scored_docs = []
-    for doc in documents:
-        content_lower = doc['content'].lower()
-        filename_lower = doc['filename'].lower()
-        score = 0
-        
-        # Special case for exact filename matches
-        if detected_topic == "hero_twins" and "hero_twins" in filename_lower:
-            score = 10000
-            print(f"   ⭐⭐⭐ FOUND HERO TWINS FILE! +10000 points")
-        elif detected_topic == "black_god" and "black_god" in filename_lower:
-            score = 10000
-            print(f"   ⭐⭐⭐ FOUND BLACK GOD FILE! +10000 points")
-        
-        # If we have a detected topic, use its keywords
-        if detected_topic:
-            for keyword in topic_keywords[detected_topic]:
-                count = content_lower.count(keyword)
-                if count > 0:
-                    score += count * 100
-                    print(f"   📖 Found '{keyword}' {count} times in {doc['filename']}")
-        
-        if score > 0:
-            scored_docs.append((score, doc))
-    
-    scored_docs.sort(reverse=True, key=lambda x: x[0])
-    
+    return tier_labels.get(tier, domain)
+
+# ----------------------------
+# DuckDuckGo HTML search
+# ----------------------------
+def ddg_search(query: str, max_results: int = 8):
+    q = urllib.parse.quote_plus(query)
+    url = f"https://duckduckgo.com/html/?q={q}"
+    html = fetch_url(url)
+    if not html:
+        return []
+    links = re.findall(r'class="result__a"[^>]*href="([^"]+)"', html)
+    cleaned = []
+    for link in links:
+        if "duckduckgo.com/l/?" in link:
+            parsed = urllib.parse.urlparse(link)
+            params = urllib.parse.parse_qs(parsed.query)
+            if "uddg" in params:
+                link = urllib.parse.unquote(params["uddg"][0])
+        cleaned.append(link)
+    seen = set()
     results = []
-    for score, doc in scored_docs[:3]:
-        results.append(doc)
-        print(f"   ✅ MATCH: {doc['filename']} (score: {score})")
-    
+    for u in cleaned:
+        if u not in seen:
+            seen.add(u)
+            results.append(u)
+        if len(results) >= max_results:
+            break
     return results
 
-def extract_relevant_text(doc, question):
-    """Extract the most relevant paragraphs from a document"""
-    content = doc['content']
+# ----------------------------
+# Gather ALL sources (LOCAL + WEB) - COMPLETE
+# ----------------------------
+def gather_all_sources(question: str, max_pages: int = 6):
+    """Gather sources from local documents AND web"""
+    all_sources = []
+    
+    # STEP 1: Load and search local documents
+    print("\n" + "="*50)
+    print("📚 SEARCHING LOCAL DOCUMENTS")
+    print("="*50)
+    local_docs = load_local_documents()
+    
     question_lower = question.lower()
-    
-    # Split into paragraphs
-    paragraphs = content.split('\n\n')
-    if len(paragraphs) < 2:
-        paragraphs = content.split('\n')
-    
-    # Score each paragraph
-    scored_paragraphs = []
-    for para in paragraphs:
-        para = para.strip()
-        if len(para) < 50:
-            continue
-        
-        para_lower = para.lower()
+    for doc in local_docs:
+        text_lower = doc['text'].lower()
         score = 0
+        words = [w for w in question_lower.split() if len(w) > 3]
+        for word in words:
+            score += text_lower.count(word) * 5
         
-        # Special keywords boost
-        special_keywords = ["hero twin", "monster slayer", "black god", "haashch", "k'é", "kinship"]
-        for kw in special_keywords:
-            if kw in para_lower:
-                score += 100
+        # Boost for exact filename matches
+        if "hero" in question_lower and "hero_twins" in doc['label'].lower():
+            score += 10000
+            print(f"   ⭐⭐⭐ HERO TWINS FILE MATCHED!")
+        if "black god" in question_lower and "black_god" in doc['label'].lower():
+            score += 10000
+            print(f"   ⭐⭐⭐ BLACK GOD FILE MATCHED!")
+        if "coyote" in question_lower:
+            if "american_indian" in doc['label'].lower() or "folklore" in doc['label'].lower():
+                score += 2000
+                print(f"   🦊 Potential Coyote content found!")
+            score += text_lower.count("coyote") * 100
         
-        if score > 0 or len(scored_paragraphs) < 2:
-            scored_paragraphs.append((score, para))
+        if score > 10:
+            doc['relevance'] = score
+            all_sources.append(doc)
+            print(f"   ✅ Local match: {doc['label']} (score: {score})")
     
-    scored_paragraphs.sort(reverse=True, key=lambda x: x[0])
+    # STEP 2: Search the web
+    print("\n" + "="*50)
+    print("🌐 SEARCHING WEB SOURCES")
+    print("="*50)
+    clean_q = question.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'").strip()
+    topic = clean_q.strip()
+    if len(topic) < 12:
+        topic = f"{topic} Diné Navajo"
+    search_query = f"{topic} meaning Diné Navajo culture"
     
-    # Return top paragraphs
-    result = []
-    for score, para in scored_paragraphs[:4]:
-        para = re.sub(r'\s+', ' ', para)
-        if len(para) > 800:
-            para = para[:800] + "..."
-        result.append(para)
+    urls = ddg_search(search_query, max_results=12)
+    allowed_urls = [u for u in urls if is_allowed(u)]
     
-    return result
+    if not allowed_urls:
+        urls = []
+        for d in sorted(ALLOWED_DOMAINS):
+            q = f"site:{d} {clean_q}"
+            urls.extend(ddg_search(q, max_results=4))
+        allowed_urls = [u for u in urls if is_allowed(u)]
+    
+    allowed_urls = allowed_urls[:max_pages]
+    trusted_urls = list(ALLOWED_EXACT_URLS)
+    
+    combined_urls = []
+    seen = set()
+    for u in (trusted_urls + allowed_urls):
+        if u not in seen:
+            seen.add(u)
+            combined_urls.append(u)
+    
+    print(f"Found {len(combined_urls)} web sources to check")
+    
+    for u in combined_urls:
+        tier, score = trust_for_url(u)
+        try:
+            html = fetch_url(u, timeout=15)
+            if not html:
+                continue
+            parser = TextExtractor()
+            parser.feed(html)
+            text = parser.get_text()
+            
+            t = text.lower()
+            if ("navajo" not in t) and ("diné" not in t) and ("dine" not in t):
+                continue
+            
+            all_sources.append({
+                "url": u,
+                "domain": domain_of(u),
+                "tier": tier,
+                "trust": score,
+                "label": label_for_source(domain_of(u), tier),
+                "text": text[:8000],
+                "source_type": "web"
+            })
+            print(f"   ✅ Web source: {domain_of(u)}")
+        except Exception as e:
+            print(f"   ❌ Error processing {u}: {e}")
+            continue
+    
+    # Sort by trust (local docs have trust=1.00 so they appear first)
+    all_sources.sort(key=lambda s: s.get("trust", 0), reverse=True)
+    print(f"\n📊 TOTAL SOURCES FOUND: {len(all_sources)}")
+    return all_sources
 
-# HTML Template
+# ----------------------------
+# Detect principles
+# ----------------------------
+def detect_principles(sources):
+    def norm(s):
+        return (s or "").lower().replace("’", "'")
+    
+    PRINCIPLES = {
+        "k'é (kinship / relational responsibility)": ["k'e", "k’é", "kinship", "clan", "clans", "affiliation"],
+        "hózhó (balance / harmony)": ["hozho", "hózhó", "harmony", "balance"],
+        "community responsibility": ["community", "responsibility", "solidarity", "respect", "kindness", "generosity", "peaceful"],
+        "matrilineal / matrilocal (family structure)": ["matrilineal", "matrilocal", "descent", "mother", "household"],
+    }
+    
+    found = {}
+    for s in sources:
+        text = norm(s.get("text", ""))
+        if not text:
+            continue
+        for pname, kws in PRINCIPLES.items():
+            hits = sum(text.count(norm(k)) for k in kws if k.strip())
+            if hits > 0:
+                if pname not in found:
+                    found[pname] = {"hits": 0, "evidence": []}
+                found[pname]["hits"] += hits
+    return found
+
+# ----------------------------
+# Generate answer from sources
+# ----------------------------
+def generate_answer(question: str, sources):
+    if not sources:
+        return """
+        <div style="line-height: 1.6;">
+            <p><strong>📖 No sources found.</strong></p>
+            <p>I couldn't retrieve any sources from local documents or the web.</p>
+            <p><strong>Try asking about:</strong></p>
+            <ul>
+                <li>Who are the Hero Twins?</li>
+                <li>Who is Black God?</li>
+                <li>What is k'é?</li>
+                <li>Tell me about Coyote</li>
+                <li>What does hózhó mean?</li>
+            </ul>
+        </div>
+        """
+    
+    principles = detect_principles(sources)
+    
+    output = []
+    output.append('<div style="line-height: 1.6;">')
+    output.append(f'<p><strong>📖 Question:</strong> {question}</p>')
+    output.append('<hr>')
+    
+    # Show sources (separate local from web)
+    local_sources = [s for s in sources if s.get('source_type') == 'local']
+    web_sources = [s for s in sources if s.get('source_type') != 'local']
+    
+    if local_sources:
+        output.append('<p><strong>📚 Local Documents Found:</strong></p>')
+        output.append('<ul>')
+        for s in local_sources[:3]:
+            output.append(f'<li><strong>{s["label"]}</strong> (Local Document)</li>')
+        output.append('</ul>')
+    
+    if web_sources:
+        output.append('<p><strong>🌐 Web Sources Found:</strong></p>')
+        output.append('<ul>')
+        for s in web_sources[:3]:
+            label = s.get('label', 'Source')
+            url = s.get('url', '')
+            output.append(f'<li><strong>{label}</strong>: <a href="{url}" target="_blank">{url}</a></li>')
+        output.append('</ul>')
+    
+    output.append('<hr>')
+    
+    # Show content from the best source
+    best_source = sources[0]
+    text = best_source.get('text', '')
+    source_label = best_source.get('label', 'Source')
+    
+    if text:
+        # Split into paragraphs
+        paragraphs = [p for p in text.split('\n\n') if len(p) > 100]
+        if paragraphs:
+            output.append(f'<p><strong>📖 Information from {source_label}:</strong></p>')
+            for p in paragraphs[:4]:
+                clean_p = re.sub(r'\s+', ' ', p)
+                if len(clean_p) > 600:
+                    clean_p = clean_p[:600] + "..."
+                output.append(f'<blockquote style="background: #f9f9f9; padding: 12px; border-left: 3px solid #2c5f2d; margin: 10px 0;">{clean_p}</blockquote>')
+    
+    # Show principles if detected
+    if principles:
+        output.append('<hr>')
+        output.append('<p><strong>🏔️ Cultural Principles Detected:</strong></p>')
+        output.append('<ul>')
+        for p, data in principles.items():
+            output.append(f'<li><strong>{p}</strong> - {data["hits"]} occurrences</li>')
+        output.append('</ul>')
+    
+    output.append('</div>')
+    return '\n'.join(output)
+
+# ----------------------------
+# HTML Template (complete)
+# ----------------------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -206,6 +565,7 @@ HTML_TEMPLATE = """
             text-align: center;
         }
         .header h1 { font-size: 2em; margin-bottom: 10px; }
+        .header p { opacity: 0.9; font-size: 1.1em; }
         .content { padding: 30px; }
         .protocol-box {
             background: #fef3c7;
@@ -214,6 +574,14 @@ HTML_TEMPLATE = """
             border-radius: 10px;
             margin-bottom: 20px;
             font-size: 14px;
+        }
+        .ask-section { margin-bottom: 25px; }
+        .ask-label {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c5f2d;
+            margin-bottom: 10px;
+            display: block;
         }
         textarea {
             width: 100%;
@@ -234,14 +602,28 @@ HTML_TEMPLATE = """
             font-size: 16px;
             cursor: pointer;
             margin-top: 15px;
+            font-weight: 500;
         }
-        .submit-btn:hover:not(:disabled) { background: #1e3a1e; }
+        .submit-btn:hover:not(:disabled) { background: #1e3a1e; transform: translateY(-2px); }
         .submit-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+        .suggestions-section {
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+        .suggestions-title {
+            font-weight: 600;
+            color: #2c5f2d;
+            margin-bottom: 12px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
         .example-buttons {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
-            margin: 20px 0;
         }
         .example-btn {
             background: white;
@@ -251,8 +633,35 @@ HTML_TEMPLATE = """
             border-radius: 25px;
             cursor: pointer;
             font-size: 13px;
+            transition: all 0.3s;
         }
-        .example-btn:hover { background: #2c5f2d; color: white; }
+        .example-btn:hover { background: #2c5f2d; color: white; transform: translateY(-2px); }
+        .divider {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+        .divider:before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #e0e0e0;
+        }
+        .divider span {
+            background: white;
+            padding: 0 15px;
+            position: relative;
+            color: #999;
+            font-size: 12px;
+        }
+        .loading-container {
+            display: inline-block;
+            margin-left: 15px;
+            vertical-align: middle;
+        }
         .loading-spinner {
             display: inline-block;
             width: 20px;
@@ -268,35 +677,43 @@ HTML_TEMPLATE = """
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .searching-message {
+            display: inline-block;
+            color: #2c5f2d;
+            font-style: italic;
+            vertical-align: middle;
+        }
+        .answer-section {
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+        .answer-header {
+            background: #2c5f2d;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px 12px 0 0;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .answer-header:before { content: "📖"; margin-right: 10px; }
         .answer {
             background: #f9f9f9;
             padding: 25px;
-            border-radius: 12px;
-            margin-top: 20px;
+            border-radius: 0 0 12px 12px;
             border-left: 4px solid #2c5f2d;
+            line-height: 1.6;
         }
-        .answer blockquote {
-            background: #f0f0f0;
-            padding: 12px;
-            border-left: 3px solid #2c5f2d;
-            margin: 10px 0;
-            font-style: italic;
-        }
-        .source-badge {
-            background: #2c5f2d;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            display: inline-block;
-            margin-left: 8px;
-        }
+        .answer p { margin-bottom: 12px; }
+        .answer ul, .answer ol { margin-left: 25px; margin-bottom: 12px; }
+        .answer li { margin-bottom: 6px; }
+        .answer blockquote { margin: 10px 0; padding: 10px; background: #f0f0f0; border-left: 3px solid #2c5f2d; }
         .fact-box {
             background: #fff3e0;
             padding: 15px;
             border-radius: 10px;
             margin-top: 20px;
             font-size: 14px;
+            border-left: 4px solid #f59e0b;
         }
         .footer {
             background: #f5f5f5;
@@ -305,40 +722,57 @@ HTML_TEMPLATE = """
             color: #666;
             font-size: 12px;
         }
-        hr { margin: 15px 0; }
+        hr { margin: 20px 0; }
+        @media (max-width: 600px) {
+            .content { padding: 20px; }
+            .example-btn { font-size: 11px; padding: 6px 12px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🌾 Diné Cultural Learning Bot</h1>
-            <p>Ask questions about Navajo traditions, language, and values</p>
+            <p>Ask any question about Navajo traditions, language, and values</p>
         </div>
         <div class="content">
             <div class="protocol-box">
-                🌄 <strong>Cultural Note:</strong> Some Diné traditions contain sacred knowledge not shared publicly.
+                🌄 <strong>Cultural Note:</strong> Some Diné traditions contain sacred knowledge not shared publicly. 
+                This chatbot provides general cultural information from published educational sources.
             </div>
             
-            <form method="POST" id="questionForm">
-                <textarea name="question" placeholder="Example: Who are the Hero Twins? What is k'é? Who is Black God?" rows="4">{{ question }}</textarea>
-                <div>
-                    <button type="submit" class="submit-btn" id="submitBtn">🔍 Ask Question</button>
-                    <div id="loadingIndicator" style="display: none; margin-left: 15px;">
-                        <span class="loading-spinner"></span> Searching your local documents...
+            <div class="ask-section">
+                <div class="ask-label">✍️ Ask Your Own Question</div>
+                <form method="POST" id="questionForm">
+                    <textarea name="question" placeholder="Example: Who are the Hero Twins? What is k'é? Tell me about Coyote..." rows="4">{{ question }}</textarea>
+                    <div>
+                        <button type="submit" class="submit-btn" id="submitBtn">🔍 Ask Question</button>
+                        <div id="loadingIndicator" style="display: none;" class="loading-container">
+                            <span class="loading-spinner"></span>
+                            <span class="searching-message">Searching local documents and trusted Diné sources...</span>
+                        </div>
                     </div>
-                </div>
-            </form>
+                </form>
+            </div>
             
-            <div class="example-buttons">
-                <button class="example-btn" data-question="Who are the Hero Twins?">🏹 Hero Twins</button>
-                <button class="example-btn" data-question="Who is Black God?">⭐ Black God</button>
-                <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
-                <button class="example-btn" data-question="Tell me about Navajo weaving">🪶 Navajo Weaving</button>
+            <div class="divider"><span>OR TRY ONE OF THESE</span></div>
+            
+            <div class="suggestions-section">
+                <div class="suggestions-title">💡 POPULAR QUESTIONS TO EXPLORE</div>
+                <div class="example-buttons">
+                    <button class="example-btn" data-question="Who are the Hero Twins?">🏹 Hero Twins</button>
+                    <button class="example-btn" data-question="Who is Black God?">⭐ Black God</button>
+                    <button class="example-btn" data-question="Tell me about Coyote">🦊 Coyote Stories</button>
+                    <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
+                    <button class="example-btn" data-question="What does hózhó mean?">☯️ Hózhó</button>
+                    <button class="example-btn" data-question="What is the Long Walk?">👣 The Long Walk</button>
+                </div>
             </div>
             
             {% if answer %}
-            <div class="answer">
-                {{ answer | safe }}
+            <div class="answer-section" id="answerSection">
+                <div class="answer-header">Your Answer</div>
+                <div class="answer" id="answerContent">{{ answer | safe }}</div>
             </div>
             {% endif %}
             
@@ -348,7 +782,7 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <div class="footer">
-            🌄 Answers from your local Diné documents | 📁 {{ doc_count }} documents loaded
+            🌄 Searching: Local documents + {{ allowed_domains_count }} trusted Diné web sources
         </div>
     </div>
     <script>
@@ -361,21 +795,40 @@ HTML_TEMPLATE = """
             });
         });
         document.getElementById('questionForm').addEventListener('submit', function() {
+            if (!document.getElementById('questionInput').value.trim()) {
+                alert('Please enter a question');
+                event.preventDefault();
+                return false;
+            }
             document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').textContent = 'Searching...';
             document.getElementById('loadingIndicator').style.display = 'inline-block';
+        });
+        window.addEventListener('load', function() {
+            const submitBtn = document.getElementById('submitBtn');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const answerSection = document.getElementById('answerSection');
+            if (submitBtn && loadingIndicator) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🔍 Ask Question';
+                loadingIndicator.style.display = 'none';
+            }
+            if (answerSection) {
+                answerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         });
     </script>
 </body>
 </html>
 """
 
-# Load documents once at startup
-print("\n" + "="*60)
-print("LOADING DOCUMENTS...")
-print("="*60)
-ALL_DOCUMENTS = load_all_documents()
-print(f"\n✅ Loaded {len(ALL_DOCUMENTS)} documents total")
-print("="*60 + "\n")
+# ----------------------------
+# Flask Routes
+# ----------------------------
+@app.errorhandler(Exception)
+def handle_exception(e):
+    print(f"Error: {e}")
+    return f"An error occurred: {str(e)}. Please try again.", 500
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -388,52 +841,47 @@ def home():
         
         if question:
             try:
-                print(f"\n{'='*60}")
-                print(f"QUESTION: {question}")
-                print(f"{'='*60}")
-                
-                matching_docs = find_answer_in_documents(question, ALL_DOCUMENTS)
-                
-                if matching_docs:
-                    answer_parts = []
-                    answer_parts.append(f'<p><strong>📖 Answer about: {question}</strong></p>')
-                    answer_parts.append('<hr>')
-                    
-                    for doc in matching_docs:
-                        source_name = doc['name']
-                        answer_parts.append(f'<p><strong>📚 Source: {source_name}</strong> <span class="source-badge">Local Document</span></p>')
-                        
-                        relevant_text = extract_relevant_text(doc, question)
-                        for text in relevant_text:
-                            answer_parts.append(f'<blockquote>{text}</blockquote>')
-                        answer_parts.append('<hr>')
-                    
-                    answer = '\n'.join(answer_parts)
-                else:
-                    answer = f"""
-                        <p><strong>📖 No matching documents found.</strong></p>
-                        <p>I couldn't find information about that topic in your local documents.</p>
-                        <p><strong>Documents available ({len(ALL_DOCUMENTS)} files):</strong></p>
-                        <ul>
+                if SEASONAL_MODE and is_hibernation_season() and mentions_animals(question):
+                    answer = """
+                        <div style="line-height: 1.6;">
+                            <p><strong>🍂 Seasonal Teaching Protocol</strong></p>
+                            <p>During winter months (November-March), traditional Diné teachings advise against discussing certain animals. Please ask about other aspects of Diné culture.</p>
+                        </div>
                     """
-                    for doc in ALL_DOCUMENTS[:15]:
-                        answer += f"<li>{doc['name']}</li>"
-                    answer += "</ul>"
+                else:
+                    print(f"\n{'='*60}")
+                    print(f"QUESTION: {question}")
+                    print(f"{'='*60}")
                     
+                    sources_result = []
+                    def gather():
+                        sources_result.append(gather_all_sources(question))
+                    
+                    thread = threading.Thread(target=gather)
+                    thread.start()
+                    thread.join(timeout=35)
+                    
+                    if thread.is_alive():
+                        answer = "Search is taking longer than expected. Please try a more specific question."
+                    else:
+                        sources = sources_result[0] if sources_result else []
+                        print(f"\n📊 TOTAL SOURCES FOUND: {len(sources)}")
+                        answer = generate_answer(question, sources)
+                        
             except Exception as e:
-                print(f"ERROR: {e}")
-                answer = f"I encountered an issue: {str(e)}"
+                print(f"Error: {e}")
+                answer = f"I encountered an issue: {str(e)}. Please try again."
     
     return render_template_string(HTML_TEMPLATE, 
                                    question=question, 
                                    answer=answer, 
                                    random_fact=random_fact,
-                                   doc_count=len(ALL_DOCUMENTS))
+                                   allowed_domains_count=len(ALLOWED_DOMAINS))
 
 if __name__ == "__main__":
     print(f"\n{'='*60}")
-    print(f"Starting Diné Cultural Learning Bot...")
-    print(f"Documents folder: {DOCUMENTS_FOLDER}")
-    print(f"Total documents loaded: {len(ALL_DOCUMENTS)}")
+    print("Diné Cultural Learning Bot Starting...")
+    print(f"📁 Local documents folder: {DOCUMENTS_FOLDER}")
+    print(f"🌐 Allowed web domains: {len(ALLOWED_DOMAINS)}")
     print(f"{'='*60}\n")
     app.run(host='0.0.0.0', port=5000, debug=True)
