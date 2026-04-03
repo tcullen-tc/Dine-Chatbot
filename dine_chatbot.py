@@ -228,6 +228,9 @@ def extract_relevant_sentences(content, keywords, filename=""):
     # Split into sentences
     sentences = re.split(r'(?<=[.!?])\s+', content)
     
+    # For hair bun questions, avoid sentences about other topics
+    is_hair_bun_question = any(kw in ' '.join(keywords) for kw in ['hair bun', 'tsiiyéél', 'hair', 'bun'])
+    
     scored_sentences = []
     for sent in sentences:
         if len(sent) < 40:
@@ -240,6 +243,15 @@ def extract_relevant_sentences(content, keywords, filename=""):
         if 'end of the project gutenberg' in sent_lower:
             break
         
+        # For hair bun questions, skip sentences about other animals/topics
+        if is_hair_bun_question:
+            # Skip sentences about Coyote, wolves, or other animals
+            if any(animal in sent_lower for animal in ['coyote', 'wolf', 'fox', 'prairie wolf', 'animal']):
+                continue
+            # Skip sentences that seem unrelated to hair buns
+            if 'hair' not in sent_lower and 'bun' not in sent_lower and 'tsiiyéél' not in sent_lower:
+                continue
+        
         score = 0
         for kw in keywords:
             score += sent_lower.count(kw) * 10
@@ -251,12 +263,10 @@ def extract_relevant_sentences(content, keywords, filename=""):
             score += 500
         if "hero twin" in sent_lower:
             score += 500
-        if "monster slayer" in sent_lower:
-            score += 500
         if "coyote" in sent_lower:
             score += 300
         if "tsiiyéél" in sent_lower or "hair bun" in sent_lower:
-            score += 500
+            score += 1000
         
         if score > 0:
             scored_sentences.append((score, sent.strip()))
