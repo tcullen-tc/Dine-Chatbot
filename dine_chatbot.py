@@ -697,3 +697,4 @@ if __name__ == "__main__":
     print(f"🔒 Approved web domains: {len(APPROVED_DOMAINS)}")
     print(f"{'='*60}\n")
     app.run(host='0.0.0.0', port=5000, debug=True)
+# v51 fix
