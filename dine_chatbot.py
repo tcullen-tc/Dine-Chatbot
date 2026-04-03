@@ -331,26 +331,58 @@ def gather_all_sources(question: str, max_pages: int = 6):
     local_docs = load_local_documents()
     
     question_lower = question.lower()
+    
     for doc in local_docs:
         text_lower = doc['text'].lower()
+        filename = doc['label'].lower()
         score = 0
-        words = [w for w in question_lower.split() if len(w) > 3]
-        for word in words:
-            score += text_lower.count(word) * 5
         
-        if "hero" in question_lower and "hero_twins" in doc['label'].lower():
-            score += 10000
-        if "black god" in question_lower and "black_god" in doc['label'].lower():
-            score += 10000
-        if "coyote" in question_lower:
-            if "american_indian" in doc['label'].lower() or "folklore" in doc['label'].lower():
-                score += 2000
-            score += text_lower.count("coyote") * 100
+        # Check what the question is about
+        is_coyote_question = "coyote" in question_lower
+        is_hero_question = "hero" in question_lower or "twin" in question_lower
+        is_blackgod_question = "black god" in question_lower
+        
+        # COYOTE QUESTION - prioritize folklore files
+        if is_coyote_question:
+            # Boost for files that are ABOUT Coyote stories
+            if "american_indian" in filename or "folklore" in filename or "fairy_tales" in filename:
+                score += 5000
+                print(f"   🦊 COYOTE STORY FILE: {doc['label']} (+5000)")
+            
+            # Count how many times "coyote" appears in the text
+            coyote_count = text_lower.count("coyote")
+            if coyote_count > 0:
+                score += coyote_count * 200
+                print(f"   📖 Found 'coyote' {coyote_count} times in {doc['label']}")
+            
+            # Penalize black_god file for Coyote questions (it only mentions Coyote briefly)
+            if "black_god" in filename:
+                score -= 1000
+                print(f"   ⚠️ Penalizing black_god file for Coyote question (-1000)")
+        
+        # HERO QUESTION
+        elif is_hero_question:
+            if "hero_twins" in filename:
+                score += 10000
+            score += text_lower.count("hero") * 100
+            score += text_lower.count("twin") * 100
+        
+        # BLACK GOD QUESTION
+        elif is_blackgod_question:
+            if "black_god" in filename:
+                score += 10000
+            score += text_lower.count("black god") * 200
+        
+        # General question - search for keywords
+        else:
+            words = [w for w in question_lower.split() if len(w) > 3]
+            for word in words:
+                score += text_lower.count(word) * 10
         
         if score > 10:
             doc['relevance'] = score
             all_sources.append(doc)
-            print(f"   ✅ Local match: {doc['label']} (score: {score})")
+            print(f"   ✅ Match: {doc['label']} (score: {score})")
     
     # STEP 2: Search the web
     print("\n🌐 Searching web sources...")
@@ -386,7 +418,8 @@ def gather_all_sources(question: str, max_pages: int = 6):
             print(f"   ❌ Error: {e}")
             continue
     
-    all_sources.sort(key=lambda s: s.get("trust", 0), reverse=True)
+    # Sort by score/relevance
+    all_sources.sort(key=lambda s: s.get("relevance", s.get("trust", 0)), reverse=True)
     return all_sources
 
 # ----------------------------
@@ -426,9 +459,18 @@ def generate_answer(question: str, sources):
     output.append(f'<p><strong>📖 Question:</strong> {question}</p>')
     output.append('<hr>')
     
-    # Show sources
+    # Separate sources
     local_sources = [s for s in sources if s.get('source_type') == 'local']
     web_sources = [s for s in sources if s.get('source_type') != 'local']
+    
+    # For Coyote questions, prioritize folklore files
+    is_coyote = "coyote" in question.lower()
+    if is_coyote:
+        # Reorder local sources to put folklore files first
+        local_sources.sort(key=lambda s: (
+            0 if "american_indian" in s['label'].lower() or "folklore" in s['label'].lower() else 1,
+            -s.get('relevance', 0)
+        ))
     
     if local_sources:
         output.append('<p><strong>📚 Local Documents Found:</strong></p><ul>')
@@ -447,32 +489,55 @@ def generate_answer(question: str, sources):
     # Show content from best source
     best = sources[0]
     text = best.get('text', '')
+    best_label = best.get('label', 'Source')
+    
+    # For Coyote, try to find the specific file with Coyote stories
+    if is_coyote:
+        for s in local_sources:
+            if "american_indian" in s['label'].lower() or "folklore" in s['label'].lower():
+                best = s
+                text = s.get('text', '')
+                best_label = s.get('label', 'Source')
+                break
     
     if text:
-        # Clean up text - remove common headers
+        # Clean up text
         lines = text.split('\n')
         clean_lines = []
         start_collecting = False
+        coyote_lines = []
         
         for line in lines:
             line_lower = line.lower()
-            # Start collecting when we find story content
+            
+            # For Coyote, specifically look for paragraphs with "coyote"
+            if is_coyote and "coyote" in line_lower:
+                coyote_lines.append(line.strip())
+            
+            # General content collection
             if not start_collecting:
-                if any(word in line_lower for word in ['coyote', 'story', 'legend', 'tale', 'once', 'long ago']):
+                if any(word in line_lower for word in ['coyote', 'story', 'legend', 'tale', 'once', 'long ago', 'myth']):
                     start_collecting = True
             
             if start_collecting:
-                # Stop at footers
                 if 'gutenberg' in line_lower or 'copyright' in line_lower:
                     break
                 if len(line.strip()) > 40:
-                    clean_lines.append(line.strip())
+                    if line not in clean_lines:
+                        clean_lines.append(line.strip())
         
-        if clean_lines:
-            # Take first 5 clean lines
+        # Use coyote-specific lines if found
+        if is_coyote and coyote_lines:
+            content = ' '.join(coyote_lines[:4])
+            if len(content) > 1000:
+                content = content[:1000] + '...'
+            output.append(f'<p><strong>📖 Information from {best_label}:</strong></p>')
+            output.append(f'<blockquote style="background:#f9f9f9;padding:12px;border-left:3px solid #2c5f2d;">{content}</blockquote>')
+        elif clean_lines:
             content = ' '.join(clean_lines[:5])
             if len(content) > 800:
                 content = content[:800] + '...'
+            output.append(f'<p><strong>📖 Information from {best_label}:</strong></p>')
             output.append(f'<blockquote style="background:#f9f9f9;padding:12px;border-left:3px solid #2c5f2d;">{content}</blockquote>')
     
     return '\n'.join(output)
