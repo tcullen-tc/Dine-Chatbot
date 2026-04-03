@@ -1,0 +1,1 @@
+nano ~/dine_documents/marriage_navajopeople.txt
