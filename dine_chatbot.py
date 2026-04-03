@@ -1,15 +1,11 @@
 import re
-import sys
-import time
-import json
+import os
+import glob
+import random
 import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
-from datetime import datetime, date
 import threading
-import random
-import os
-import glob
 from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
@@ -20,10 +16,61 @@ DID_YOU_KNOW_FACTS = [
     "K'é (kinship) extends beyond blood relations to include all of creation.",
     "Hózhó is often translated as 'beauty' but encompasses harmony, balance, and wellness.",
     "Coyote (Ma'ii) is an important trickster figure in Diné stories.",
-    "The four sacred mountains mark the boundaries of traditional Dinétah.",
-    "Weaving was taught to the Navajo by Spider Woman, a holy being.",
 ]
 
+# ----------------------------
+# APPROVED DINÉ DOMAINS - ONLY THESE ARE SEARCHED
+# ----------------------------
+APPROVED_DOMAINS = [
+    # --- Official Navajo Nation / Diné Government ---
+    "navajo-nsn.gov",
+    "courts.navajo-nsn.gov",
+    "navajocourts.org",
+    "navajochapters.org",
+    "nnwo.org",
+    "navajopeople.org",
+    "navajo.org",
+
+    # --- Diné Education & Language ---
+    "dinecollege.edu",
+    "navajolanguageacademy.org",
+    "roughrock.k12.az.us",
+    "nau.edu",
+    "navajotech.edu",
+    "unm.edu",
+
+    # --- Diné Media & Community Organizations ---
+    "navajotimes.com",
+    "navajocodetalkers.org",
+    "discovernavajo.com",
+    "navajohopiobserver.com",
+    "dineta.com",
+
+    # --- Indigenous Journalism ---
+    "ictnews.org",
+    "indiancountrytoday.com",
+    "nativeamericannews.net",
+    "ncai.org",
+
+    # --- Museums & Academic Institutions ---
+    "americanindian.si.edu",
+    "loc.gov",
+    "pbs.org",
+    "smithsonianmag.com",
+
+    # --- University Presses ---
+    "unmpress.com",
+    "upcolorado.com",
+    "uapress.arizona.edu",
+    
+    # --- Academic & Cultural Resources ---
+    "jstor.org",
+    "ehillerman.unm.edu",
+    
+    # --- Additional Cultural Sites ---
+    "navajoculture.org",
+    "traditionalnavajoteachings.org",
+]
 # ----------------------------
 # LOCAL DOCUMENTS FOLDER
 # ----------------------------
@@ -63,33 +110,42 @@ def load_local_documents():
                 "name": filename.replace('.txt', ''),
                 "filename": filename,
                 "content": content,
-                "size": len(content)
             })
-            print(f"   ✅ Loaded: {filename} ({len(content)} chars)")
+            print(f"   ✅ Loaded: {filename}")
         except Exception as e:
             print(f"   ❌ Error: {e}")
     return documents
 
-# ----------------------------
-# COMPLETE ALLOWED DOMAINS - ALL 39 DINÉ SOURCES
-# ----------------------------
-ALLOWED_DOMAINS = [
-    "navajo-nsn.gov", "courts.navajo-nsn.gov", "navajocourts.org",
-    "navajochapters.org", "nnwo.org", "navajopeople.org", "navajo.org",
-    "dinecollege.edu", "navajolanguageacademy.org", "roughrock.k12.az.us",
-    "nau.edu", "navajotech.edu", "unm.edu", "navajotimes.com",
-    "navajocodetalkers.org", "discovernavajo.com", "navajohopiobserver.com",
-    "dineta.com", "ictnews.org", "indiancountrytoday.com", "nativeamericannews.net",
-    "ncai.org", "americanindian.si.edu", "loc.gov", "pbs.org", "smithsonianmag.com",
-    "unmpress.com", "upcolorado.com", "uapress.arizona.edu", "jstor.org",
-    "anthrosource.onlinelibrary.wiley.com", "ehillerman.unm.edu",
-    "navajoculture.org", "traditionalnavajoteachings.org",
-]
-
-USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15"
+LOCAL_DOCUMENTS = load_local_documents()
 
 # ----------------------------
-# HTML to Text Extractor
+# Dynamic Keyword Extraction
+# ----------------------------
+def extract_keywords(question):
+    """Extract meaningful keywords from the question dynamically"""
+    stop_words = {'what', 'who', 'how', 'why', 'when', 'where', 'is', 'are', 'was', 'were',
+                  'the', 'a', 'an', 'and', 'or', 'but', 'for', 'nor', 'so', 'yet', 'of',
+                  'to', 'in', 'for', 'on', 'by', 'with', 'without', 'about', 'tell', 'me',
+                  'can', 'you', 'please', 'would', 'could', 'should', 'does', 'do', 'did',
+                  'has', 'have', 'had', 'been', 'being', 'called', 'known', 'also', 'very'}
+    
+    words = question.lower().split()
+    keywords = [w for w in words if w not in stop_words and len(w) > 2]
+    
+    # Also keep 2-word phrases
+    phrases = []
+    for i in range(len(words) - 1):
+        phrase = f"{words[i]} {words[i+1]}"
+        if len(phrase) > 5 and words[i] not in stop_words:
+            phrases.append(phrase)
+    
+    # Combine, remove duplicates
+    all_keywords = list(set(keywords + phrases))
+    print(f"🔍 Extracted keywords: {all_keywords[:8]}")  # Show first 8
+    return all_keywords
+
+# ----------------------------
+# HTML to Text Extractor for web content
 # ----------------------------
 class TextExtractor(HTMLParser):
     def __init__(self):
@@ -129,17 +185,19 @@ def domain_of(url):
     except:
         return ""
 
-def is_allowed(url):
+def is_approved_domain(url):
     domain = domain_of(url)
-    return any(domain.endswith(d) for d in ALLOWED_DOMAINS)
+    return any(domain.endswith(d) for d in APPROVED_DOMAINS)
 
-def ddg_search(query, max_results=6):
+def ddg_search_approved(query, max_results=5):
+    """Search DuckDuckGo but only return results from approved domains"""
     try:
         q = urllib.parse.quote_plus(query)
         url = f"https://html.duckduckgo.com/html/?q={q}"
         html = fetch_url(url)
         if not html:
             return []
+        
         links = re.findall(r'<a[^>]+href="([^"]+)"[^>]*>', html)
         results = []
         for link in links:
@@ -147,7 +205,7 @@ def ddg_search(query, max_results=6):
                 match = re.search(r'uddg=([^&]+)', link)
                 if match:
                     link = urllib.parse.unquote(match.group(1))
-            if link.startswith('http') and is_allowed(link):
+            if link.startswith('http') and is_approved_domain(link):
                 results.append(link)
             if len(results) >= max_results:
                 break
@@ -157,92 +215,79 @@ def ddg_search(query, max_results=6):
         return []
 
 # ----------------------------
-# Extract clean text from documents (skip Gutenberg headers)
+# Extract relevant paragraph
 # ----------------------------
-def extract_clean_text(content, question=""):
-    lines = content.split('\n')
-    clean_lines = []
-    start_collecting = False
+def extract_relevant_paragraph(content, keywords):
+    """Extract the most relevant paragraph based on keywords"""
+    paragraphs = content.split('\n\n')
+    if len(paragraphs) < 2:
+        paragraphs = content.split('\n')
     
-    start_markers = ['coyote', 'story', 'legend', 'tale', 'myth', 'tradition', 
-                     'once upon', 'long ago', 'there lived', 'according to']
+    best_para = ""
+    best_score = 0
     
-    is_coyote = "coyote" in question.lower()
+    for para in paragraphs:
+        if len(para) < 100:
+            continue
+        para_lower = para.lower()
+        score = 0
+        for kw in keywords:
+            score += para_lower.count(kw) * 10
+        if score > best_score:
+            best_score = score
+            best_para = para
     
-    for line in lines:
-        line_lower = line.lower()
-        
-        if not start_collecting:
-            if any(marker in line_lower for marker in start_markers):
-                start_collecting = True
-        
-        if start_collecting:
-            if 'gutenberg' in line_lower or 'copyright' in line_lower or 'end of the project' in line_lower:
-                break
-            if len(line.strip()) > 40:
-                if is_coyote and 'coyote' in line_lower:
-                    clean_lines.insert(0, line.strip())
-                else:
-                    clean_lines.append(line.strip())
-    
-    if not clean_lines:
-        for line in lines:
-            if len(line.strip()) > 80:
-                clean_lines.append(line.strip())
-                if len(clean_lines) >= 10:
+    if best_para:
+        best_para = re.sub(r'\s+', ' ', best_para)
+        # Skip Gutenberg headers
+        if 'gutenberg' in best_para.lower() or 'project gutenberg' in best_para.lower():
+            # Find the next paragraph
+            for para in paragraphs:
+                if len(para) > 200 and 'gutenberg' not in para.lower():
+                    best_para = re.sub(r'\s+', ' ', para)
                     break
-    
-    return '\n'.join(clean_lines[:15])
+        if len(best_para) > 800:
+            best_para = best_para[:800] + "..."
+        return best_para
+    return None
 
 # ----------------------------
-# Search local documents
+# Search local documents (dynamic)
 # ----------------------------
-def search_local_documents(question, documents):
+def search_local(question, keywords):
     results = []
-    question_lower = question.lower()
-    is_coyote = "coyote" in question_lower
-    is_hero = "hero" in question_lower or "twin" in question_lower
-    is_blackgod = "black god" in question_lower
     
-    for doc in documents:
+    for doc in LOCAL_DOCUMENTS:
         content_lower = doc['content'].lower()
-        filename = doc['filename'].lower()
         score = 0
         
-        if is_coyote and ("american_indian" in filename or "folklore" in filename):
-            score += 5000
-        elif is_hero and "hero_twins" in filename:
-            score += 5000
-        elif is_blackgod and "black_god" in filename:
-            score += 5000
+        for kw in keywords:
+            count = content_lower.count(kw)
+            if count > 0:
+                score += count * 10
         
-        words = [w for w in question_lower.split() if len(w) > 3]
-        for word in words:
-            score += content_lower.count(word) * 10
-        
-        if is_coyote:
-            score += content_lower.count("coyote") * 100
-        
-        if score > 20:
-            clean_text = extract_clean_text(doc['content'], question)
-            results.append({
-                "title": doc['name'],
-                "filename": doc['filename'],
-                "score": score,
-                "text": clean_text,
-                "type": "local"
-            })
+        if score > 0:
+            relevant_para = extract_relevant_paragraph(doc['content'], keywords)
+            if relevant_para:
+                results.append({
+                    "title": doc['name'],
+                    "content": relevant_para,
+                    "score": score,
+                    "type": "local"
+                })
     
     results.sort(key=lambda x: x['score'], reverse=True)
     return results[:3]
 
 # ----------------------------
-# Search web sources (Diné-approved domains only)
+# Search approved web domains (dynamic)
 # ----------------------------
-def search_web_sources(question):
+def search_web(question, keywords):
     results = []
-    search_query = f"{question} Navajo Diné"
-    urls = ddg_search(search_query, max_results=5)
+    
+    # Use the question itself as search query
+    search_query = question
+    urls = ddg_search_approved(search_query, max_results=5)
     
     for url in urls:
         try:
@@ -251,56 +296,66 @@ def search_web_sources(question):
                 parser = TextExtractor()
                 parser.feed(html)
                 text = parser.get_text()
+                
                 if text and len(text) > 200:
-                    results.append({
-                        "title": domain_of(url),
-                        "url": url,
-                        "text": text[:2000],
-                        "type": "web"
-                    })
+                    # Check relevance
+                    text_lower = text.lower()
+                    relevance = 0
+                    for kw in keywords:
+                        relevance += text_lower.count(kw)
+                    
+                    if relevance > 0:
+                        relevant_para = extract_relevant_paragraph(text, keywords)
+                        if relevant_para:
+                            results.append({
+                                "title": domain_of(url),
+                                "url": url,
+                                "content": relevant_para,
+                                "relevance": relevance,
+                                "type": "web"
+                            })
         except Exception as e:
             print(f"Error: {e}")
             continue
     
+    results.sort(key=lambda x: x['relevance'], reverse=True)
     return results[:3]
 
 # ----------------------------
 # Generate answer
 # ----------------------------
-def generate_answer(question, local_results, web_results):
+def generate_answer(question, local_results, web_results, keywords):
     output = []
     output.append(f'<p><strong>📖 Question:</strong> {question}</p>')
     output.append('<hr>')
     
+    # Show local document results first
     if local_results:
-        output.append('<p><strong>📚 From your local documents:</strong></p>')
+        output.append('<p><strong>📚 From approved Diné documents:</strong></p>')
         for r in local_results:
             output.append(f'<p><strong>📄 {r["title"]}</strong></p>')
-            if r['text']:
-                preview = r['text'][:600]
-                if len(r['text']) > 600:
-                    preview += '...'
-                output.append(f'<blockquote style="background:#f9f9f9;padding:12px;border-left:3px solid #2c5f2d;margin:10px 0;">{preview}</blockquote>')
+            output.append(f'<blockquote style="background:#f9f9f9;padding:12px;border-left:3px solid #2c5f2d;margin:10px 0;">{r["content"]}</blockquote>')
         output.append('<hr>')
     
+    # Show approved web results
     if web_results:
-        output.append('<p><strong>🌐 From trusted Diné web sources:</strong></p>')
+        output.append('<p><strong>🌐 From approved Diné websites:</strong></p>')
         for r in web_results:
             output.append(f'<p><strong>{r["title"]}</strong><br><a href="{r["url"]}" target="_blank">{r["url"]}</a></p>')
-            preview = r['text'][:500] + '...' if len(r['text']) > 500 else r['text']
-            output.append(f'<blockquote style="background:#f0f0f0;padding:12px;border-left:3px solid #2c5f2d;margin:10px 0;">{preview}</blockquote>')
+            output.append(f'<blockquote style="background:#f0f0f0;padding:12px;border-left:3px solid #2c5f2d;margin:10px 0;">{r["content"]}</blockquote>')
     
     if not local_results and not web_results:
-        output.append('<p><strong>📖 No Diné cultural sources found.</strong></p>')
-        output.append('<p>I can only answer questions about Diné (Navajo) culture from approved sources. Try asking about:</p>')
+        output.append('<p><strong>📖 No information found in approved Diné sources.</strong></p>')
+        output.append('<p>I searched for these keywords in your documents and approved websites:</p>')
+        output.append(f'<p style="background:#f0f0f0;padding:10px;border-radius:8px;"><code>{" | ".join(keywords[:8])}</code></p>')
+        output.append('<p>Try asking about:</p>')
         output.append('<ul>')
         output.append('<li>Who are the Hero Twins?</li>')
         output.append('<li>Who is Black God?</li>')
         output.append('<li>Who is Coyote?</li>')
         output.append('<li>What is k\'é?</li>')
-        output.append('<li>Tell me about Navajo weaving</li>')
-        output.append('<li>What is the Long Walk?</li>')
         output.append('</ul>')
+        output.append(f'<p style="font-size:12px; color:#666; margin-top:15px;">🔒 Search restricted to {len(APPROVED_DOMAINS)} approved Diné cultural domains + local documents.</p>')
     
     return '\n'.join(output)
 
@@ -337,7 +392,6 @@ HTML_TEMPLATE = """
             text-align: center;
         }
         .header h1 { font-size: 2em; margin-bottom: 10px; }
-        .header p { opacity: 0.9; }
         .content { padding: 30px; }
         .protocol-box {
             background: #fef3c7;
@@ -383,9 +437,8 @@ HTML_TEMPLATE = """
             border-radius: 25px;
             cursor: pointer;
             font-size: 13px;
-            transition: all 0.3s;
         }
-        .example-btn:hover { background: #2c5f2d; color: white; transform: translateY(-2px); }
+        .example-btn:hover { background: #2c5f2d; color: white; }
         .loading-spinner {
             display: inline-block;
             width: 20px;
@@ -425,9 +478,20 @@ HTML_TEMPLATE = """
             font-size: 12px;
         }
         hr { margin: 15px 0; }
-        @media (max-width: 600px) {
-            .content { padding: 20px; }
-            .example-btn { font-size: 11px; padding: 6px 12px; }
+        .badge {
+            display: inline-block;
+            background: #2c5f2d;
+            color: white;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-left: 8px;
+        }
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
         }
     </style>
 </head>
@@ -435,12 +499,12 @@ HTML_TEMPLATE = """
     <div class="container">
         <div class="header">
             <h1>🌾 Diné Cultural Learning Bot</h1>
-            <p>Ask questions about Navajo traditions, language, and values</p>
+            <p>Ask any question about Navajo traditions, language, and values</p>
         </div>
         <div class="content">
             <div class="protocol-box">
-                🌄 <strong>Cultural Note:</strong> Some Diné traditions contain sacred knowledge not shared publicly. 
-                This chatbot provides general cultural information from published educational sources.
+                🌄 <strong>Cultural Note:</strong> Answers are from approved Diné cultural sources only.
+                <span class="badge">{{ domain_count }} approved domains</span>
             </div>
             
             <form method="POST" id="questionForm">
@@ -459,7 +523,6 @@ HTML_TEMPLATE = """
                 <button class="example-btn" data-question="Who is Coyote?">🦊 Coyote</button>
                 <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
                 <button class="example-btn" data-question="Tell me about Navajo weaving">🪶 Weaving</button>
-                <button class="example-btn" data-question="What is the Long Walk?">👣 Long Walk</button>
             </div>
             
             {% if answer %}
@@ -474,7 +537,7 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <div class="footer">
-            🌍 Searching: {{ doc_count }} local documents + {{ domain_count }} approved Diné web domains
+            🔒 Search restricted to {{ domain_count }} approved Diné cultural domains + {{ doc_count }} local documents
         </div>
     </div>
     <script>
@@ -487,17 +550,8 @@ HTML_TEMPLATE = """
             });
         });
         document.getElementById('questionForm').addEventListener('submit', function() {
-            if (!document.getElementById('questionInput').value.trim()) {
-                alert('Please enter a question');
-                event.preventDefault();
-                return false;
-            }
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('loadingIndicator').style.display = 'inline-block';
-        });
-        window.addEventListener('load', function() {
-            document.getElementById('submitBtn').disabled = false;
-            document.getElementById('loadingIndicator').style.display = 'none';
         });
     </script>
 </body>
@@ -518,34 +572,38 @@ def home():
     answer = ""
     random_fact = random.choice(DID_YOU_KNOW_FACTS)
     
-    local_docs = load_local_documents()
-    
     if request.method == 'POST':
         question = request.form.get('question', '').strip()
         
         if question:
-            print(f"\n🔍 Searching for: {question}")
+            print(f"\n{'='*50}")
+            print(f"📖 QUESTION: {question}")
+            print(f"{'='*50}")
             
-            local_results = search_local_documents(question, local_docs)
-            web_results = search_web_sources(question)
+            # Extract keywords dynamically from the question
+            keywords = extract_keywords(question)
             
-            print(f"📚 Local: {len(local_results)} results")
-            print(f"🌐 Web: {len(web_results)} results")
+            # Search using the extracted keywords
+            local_results = search_local(question, keywords)
+            web_results = search_web(question, keywords)
             
-            answer = generate_answer(question, local_results, web_results)
+            print(f"📚 Local results: {len(local_results)}")
+            print(f"🌐 Web results: {len(web_results)}")
+            
+            answer = generate_answer(question, local_results, web_results, keywords)
     
     return render_template_string(HTML_TEMPLATE, 
                                    question=question, 
                                    answer=answer, 
                                    random_fact=random_fact,
-                                   doc_count=len(local_docs),
-                                   domain_count=len(ALLOWED_DOMAINS))
+                                   doc_count=len(LOCAL_DOCUMENTS),
+                                   domain_count=len(APPROVED_DOMAINS))
 
 if __name__ == "__main__":
     print(f"\n{'='*60}")
-    print("🌾 Diné Cultural Learning Bot")
+    print(f"🌾 Diné Cultural Learning Bot")
     print(f"📁 Documents folder: {DOCUMENTS_FOLDER}")
-    print(f"📚 Local documents: {len(load_local_documents())}")
-    print(f"🌐 Approved web domains: {len(ALLOWED_DOMAINS)}")
+    print(f"📚 Local documents: {len(LOCAL_DOCUMENTS)}")
+    print(f"🔒 Approved web domains: {len(APPROVED_DOMAINS)}")
     print(f"{'='*60}\n")
     app.run(host='0.0.0.0', port=5000, debug=True)
