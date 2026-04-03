@@ -1,0 +1,677 @@
+================================================================================
+DINÉ BIZAAD - THE NAVAJO LANGUAGE: COMPREHENSIVE GUIDE
+================================================================================
+Sources: Navajo Nation Division of Education, Diné College, Navajo Language Academy, "The Navajo Language" (Young & Morgan)
+
+
+PART 1: OVERVIEW OF DINÉ BIZAAD
+================================================================================
+
+Diné Bizaad (Navajo language) is the most widely spoken Native American language in the United States.
+
+BASIC FACTS:
+
+Language family: Athabaskan (Na-Dené)
+Related languages: Apache (all dialects), Tłı̨chǫ (Dogrib), Dene Sųłiné (Chipewyan)
+Number of speakers: Approximately 148,530 (as of 2021)
+Language vitality: Endangered (UNESCO classification)
+Geographic area: Navajo Nation (Arizona, New Mexico, Utah) and urban areas
+
+UNIQUE FEATURES:
+
+Why Navajo is considered difficult for English speakers:
+
+1. Verb-heavy language - most meaning is in verbs, not nouns
+2. Four tones (high, low, rising, falling)
+3. Complex verb system with up to 500 prefixes
+4. Word order: Subject-Object-Verb (English is Subject-Verb-Object)
+5. No adjectives - descriptive words are verbs
+6. Animacy hierarchy - verbs change based on how "alive" the subject is
+7. Classificatory verbs - different verbs for handling different types of objects
+
+EXAMPLE OF VERB COMPLEXITY:
+
+Single English sentence: "I am going"
+Navajo has multiple forms depending on context:
+- Naashá - I am going (on foot, now)
+- Yishááł - I am going (on foot, future)
+- Neesháázh - I went (on foot, past)
+- Deeshááł - I am about to go (on foot)
+- Náshtįįh - I am going (riding a horse)
+- Yishtįįh - I am going (riding a horse, future)
+- Níyá - I arrived (having gone)
+- Dziih - I am going (in a vehicle)
+- Yidziih - I am going (in a vehicle, future)
+
+CLASSIFICATORY VERBS:
+
+Navajo has different verbs for handling different types of objects:
+
+Handling objects:
+- -'ą́ - to handle a solid roundish object (ball, apple)
+- -tłéé' - to handle a mushy object (mud, mashed potatoes)
+- -tsoos - to handle a flat flexible object (paper, blanket)
+- -tłéézh - to handle a slender flexible object (rope, snake)
+- -jol - to handle a bulky object (sack of flour, backpack)
+- -nil - to handle several objects (keys, coins)
+- -yįįh - to handle a living object (animal, baby)
+- -zhin - to handle a liquid container (bottle, cup)
+
+Example: "I give it to you" changes based on the object:
+- Na'niłtįįh - I give you a book (flat flexible)
+- Na'ní'ą́ - I give you an apple (round)
+- Na'níłtéézh - I give you a rope (slender flexible)
+- Na'níłtéé' - I give you mud (mushy)
+
+
+PART 2: THE NAVAJO ALPHABET AND PRONUNCIATION
+================================================================================
+
+Navajo uses a modified Latin alphabet with 36 letters.
+
+CONSONANTS:
+
+Navajo has many sounds not found in English:
+
+Voiceless stops (similar to English but unaspirated):
+- b [p] - like "spit" (no puff of air)
+- d [t] - like "stick" (no puff of air)
+- g [k] - like "skill" (no puff of air)
+- ' [ʔ] - glottal stop (like "uh-oh")
+
+Aspirated stops (with a puff of air):
+- t [tʰ] - like "top"
+- k [kʰ] - like "kite"
+- ch [tʃʰ] - like "chin"
+
+Ejective stops (made with glottal closure):
+- t' [t'] - no English equivalent
+- k' [k'] - no English equivalent
+- ch' [tʃ'] - no English equivalent
+- ts' [ts'] - no English equivalent
+
+Fricatives:
+- s [s] - like "see"
+- z [z] - like "zoo"
+- sh [ʃ] - like "ship"
+- zh [ʒ] - like "measure"
+- h [h] - like "hat"
+- ł [ɬ] - voiceless L (no English equivalent)
+- l [l] - like "light"
+
+Nasals:
+- m [m] - like "mother"
+- n [n] - like "no"
+- ng [ŋ] - like "sing" (only at ends of words)
+
+Glides:
+- w [w] - like "water"
+- y [j] - like "yes"
+
+VOWELS:
+
+Navajo has 4 basic vowels, each with 4 variations (short, long, nasalized, and long nasalized):
+
+a [ɑ] - like "father"
+- á (high tone) - aá (long)
+- ą (nasal) - aą (long nasal)
+
+e [e] - like "pay"
+- é (high tone) - eé (long)
+- ę (nasal) - eę (long nasal)
+
+i [ɪ] - like "pit"
+- í (high tone) - ií (long)
+- į (nasal) - iį (long nasal)
+
+o [o] - like "go"
+- ó (high tone) - oó (long)
+- ǫ (nasal) - oǫ (long nasal)
+
+TONES:
+
+Navajo has four tones (pitch patterns):
+
+1. High tone (á, é, í, ó) - marked with acute accent
+2. Low tone (a, e, i, o) - unmarked
+3. Rising tone (aá, eé, ií, oó) - low to high
+4. Falling tone (áa, ée, íi, óo) - high to low
+
+Tone changes meaning:
+- aghaa' (hair) vs. agháá' (winter)
+- bįįh (deer) vs. bííh (drought)
+- tązh (tooth) vs. tázh (spotted)
+- béésh (knife) vs. beesh (metal)
+
+STRESS:
+
+Stress is usually on the first syllable of a word:
+- Shí-má (my mother)
+- Ní-ma (your mother)
+- Bí-má (his/her mother)
+
+
+PART 3: NAVAJO GRAMMAR BASICS
+================================================================================
+
+WORD ORDER:
+
+Standard word order: Subject - Object - Verb (SOV)
+
+Example:
+"John ałtį́į́' yiłchozh" - John coffee drinks (John drinks coffee)
+- John (subject)
+- ałtį́į́' (coffee - object)
+- yiłchozh (drinks - verb)
+
+"Shí naaltsoos nish'į́" - I book see (I see the book)
+- Shí (I - subject)
+- naaltsoos (book - object)
+- nish'į́ (see - verb)
+
+NOUNS:
+
+Nouns do not change for plural (context indicates number):
+- tł'ízí - goat / goats
+- dibé - sheep / sheep
+- łééchąą'í - dog / dogs
+
+Possession is shown with prefixes:
+- shi- (my) + má (mother) = shimá (my mother)
+- ni- (your) + má (mother) = nimá (your mother)
+- bi- (his/her) + má (mother) = bimá (his/her mother)
+- nihi- (our) + má (mother) = nihimá (our mother)
+- danihi- (your pl.) + má = danihimá (your [plural] mother)
+- bí- (their) + má = bímá (their mother)
+
+VERBS:
+
+Verbs are the most complex part of Navajo. They consist of:
+
+Prefix + prefix + ... + root
+
+Example: yishááł (I am going)
+- y- (3rd person object prefix)
+- i- (thematic prefix)
+- sh- (1st person subject prefix)
+- ááł (verb root meaning "to go on foot")
+
+Common verb modes:
+- Imperfective (ongoing action): naashá - I am going
+- Perfective (completed action): neesháázh - I went
+- Future (will happen): deeshááł - I will go
+- Usitative (habitual action): nishááh - I go (regularly)
+- Optative (desired action): nááshá - I would go
+- Progressive (continuous): náníshááh - I am going along
+
+PRONOUNS:
+
+Independent pronouns:
+- Shí - I, me
+- Ní - you
+- Bí - he, she, him, her
+- Nihí - we, us (excluding you)
+- Danihí - we, us (including you)
+- Daabí - they, them
+
+Subject pronouns (incorporated into verb):
+- sh- / -s- - I
+- ni- / -n- - you
+- bi- / -∅- - he/she
+- nihi- / -n- - we (excl.)
+- danihi- / -n- - we (incl.)
+- daabi- / -∅- - they
+
+QUESTION WORDS:
+
+- Haash - what
+- Háí - who
+- Hádą́ - when
+- Háadi - where
+- Haashíí - how
+- Haa - which
+- Haashę́ę - why
+- Hánít'éego - how many
+
+QUESTION FORMATION:
+
+Add question particle "shı̨́ı̨́" at the end of sentence:
+- Ní yá'át'ééh shı̨́ı̨́? - Are you good? (How are you?)
+- Naaltsoos yíníyą́ shı̨́ı̨́? - Did you see the book?
+
+Or use question words:
+- Haash yinílyé? - What is your name?
+- Háadi nee'? - Where do you live?
+- Haashíí aníná? - How are you?
+
+NEGATION:
+
+Add "doo" before verb and "da" after verb:
+- Doo yá'át'ééh da - It is not good
+- Doo naashá da - I am not going
+- Doo bizaad yíłti' da - He doesn't speak the language
+
+Examples:
+- Doo shił hózhǫ́ da - I am not well / I am unhappy
+- Doo yá'át'ééh da - It is not good / bad
+- Doo bééhózin da - I don't know
+
+
+PART 4: COMMON PHRASES AND VOCABULARY
+================================================================================
+
+GREETINGS AND POLITE PHRASES:
+
+- Yá'át'ééh - Hello / It is good
+- Yá'át'ééh abíní - Good morning
+- Yá'át'ééh ałní'íní - Good afternoon
+- Yá'át'ééh iíłní' - Good evening
+- Yá'át'ééh hiiłníí' - Good night
+- Hágoónee' - Goodbye (see you later)
+- Nizhóní - It's good / beautiful
+- Ahé'hee - Thank you
+- T'áá shǫǫdí - You're welcome
+- Naanish - Excuse me / Pardon me
+- Haash yinílyé? - What is your name?
+- [Name] yinishyé - My name is [Name]
+- Haashą́ą́ shı̨́ı̨́ - What's up? (informal)
+
+DAILY CONVERSATION:
+
+- Ąąʼ - Yes
+- Dooda - No
+- Nizhóní - Good / beautiful
+- Łį́į́ - Okay / all right
+- Bee shózhǫ́ - I like it
+- Doo bee shózhǫ́ da - I don't like it
+- Shił hózhǫ́ - I am happy / well
+- Doo shił hózhǫ́ da - I am unhappy / unwell
+- T'áá ákót'é - That's right / correct
+- Doo ákót'é da - That's wrong / incorrect
+- Hádą́ - When?
+- Háadi - Where?
+- Haashíí - How?
+- Haashę́ę - Why?
+- Haash - What?
+
+GETTING TO KNOW YOU:
+
+- Haash yinílyé? - What is your name?
+- [Name] yinishyé - My name is [Name]
+- Haash éí binilii? - What is your clan?
+- [Clan name] nishłį́ - I am [Clan name]
+- [Clan name] bashishchiin - Born for [Clan name]
+- Dóoneʼé nishłį́? - What clan are you?
+- Hánít'éego diné? - How old are you?
+- [Number] nááhai - [Number] years old
+- Naa'á? - Where do you live?
+- [Place] nishłı̨́ - I live in [Place]
+
+NUMBERS:
+
+1 - T'ááłá'í
+2 - Naaki
+3 - Táá'
+4 - Dį́į́'
+5 - Ashdla'
+6 - Hastą́ą́
+7 - Tsosts'id
+8 - Tseebíí
+9 - Náhást'éí
+10 - Neenááz
+11 - T'ááłá'ts'áadah
+12 - Naakits'áadah
+13 - Tááts'áadah
+20 - Naadiin
+30 - Tádiin
+40 - Dízdiin
+50 - Ashdlaadiin
+100 - Neediin
+1000 - Tó neeznádiin
+
+FAMILY (K'é):
+
+- Shimá - My mother
+- Shizhé'é - My father
+- Shimásání - My maternal grandmother
+- Shinálí - My paternal grandmother
+- Shicheii - My maternal grandfather
+- Shinálí - My paternal grandfather
+- Shibízhí - My maternal aunt
+- Shidá'í - My paternal aunt
+- Shidá'í - My maternal uncle
+- Shizhé'é - My paternal uncle
+- Shidine'é - My older sister
+- Shitsilí - My younger sister
+- Shinááí - My older brother
+- Shitsilí - My younger brother
+- Shiye' - My son
+- Shi'áád - My daughter
+- Shik'is - My sibling/cousin (same clan)
+- Shiláán - My cross-cousin (marriageable)
+
+OBJECTS:
+
+- Naaltsoos - Book
+- Béeso - Money
+- Tó - Water
+- Ma'ii - Coyote
+- Łééchąą'í - Dog
+- Mósí - Cat
+- Dibé - Sheep
+- Tł'ízí - Goat
+- Łį́į́' - Horse
+- Béésh - Knife / metal
+- Tsiiyeel - Hair bun
+- Ayóí - Very (as in "ayóí shil hózhǫ́" - I am very happy)
+
+FOOD:
+
+- Naadą́ą́' - Corn
+- Tó - Water
+- Ałtį́į́' - Coffee
+- Ch'ééhjiyáán - Breakfast
+- Awéé' - Baby (also means lunch)
+- E'elyá - Dinner
+- Łeeshch'ííł - Bread
+- Bisóodi - Pork
+- Tł'ízí bitsiigha' - Goat meat
+- Dibé bitsiigha' - Mutton
+- Tą́ą́' - Peach
+
+WEATHER AND NATURE:
+
+- Níłch'i - Wind
+- Tó - Water / rain
+- Yas - Snow
+- Tsé - Rock
+- Séí - Sand
+- Kintah - Town / city
+- Tségháhoodzání - Window Rock (capital)
+- Náhookǫs - North
+- Shádi'ááh - South
+- Ha'a'aah - East
+- E'e'aah - West
+
+
+PART 5: VERBS FOR EVERYDAY USE
+================================================================================
+
+COMMON VERBS (Imperfective - present tense):
+
+- Naashá - I go (on foot)
+- Yishááł - I will go (on foot)
+- Nááhai - I live (I am alive)
+- Shighan - I am at home / I live
+- Shibéézh - I am cooking
+- Na'ní - I am working
+- Yishch'į́ - I am eating (solid food)
+- Yishxǫǫh - I am drinking
+- Yishłį́ - I am drinking (liquid)
+- Yishzhááł - I am eating (meal)
+- Nishtą́ - I am sitting
+- Nishtééh - I am lying down
+- Nishtłééh - I am sleeping
+- Nishta' - I am standing
+- Nishtéézh - I am walking (riding)
+- Nishtįįh - I am riding (horse/vehicle)
+
+VERBS FOR EMOTIONS:
+
+- Shił hózhǫ́ - I am happy / peaceful
+- Shił nahaz'ą́ - I am sad / troubled
+- Shił bee hózhǫ́ - I like it
+- Doo shił bee hózhǫ́ da - I don't like it
+- Shił ch'ííní - I am angry
+- Shił ił hóóyéé' - I am afraid
+- Shił ííníséé' - I am tired
+- Shił dahóóyéé' - I am surprised
+- Shił nizhóní - I feel good
+- Doo shił nizhóní da - I don't feel good
+
+VERBS FOR THINKING AND KNOWING:
+
+- Shił bééhózin - I know
+- Doo shił bééhózin da - I don't know
+- Shił nitsíjíkees - I am thinking
+- Shił nitsíjíkees - I understand
+- Doo shił nitsíjíkees da - I don't understand
+- Shił ná'ádleeh - I remember
+- Shił ádzaa - I forgot
+
+VERBS FOR SPEAKING:
+
+- Yishłí - I am saying
+- Yishłí - I am speaking
+- Nizhónígo nishłí - I speak well
+- Doo nizhónígo nishłí da - I don't speak well
+- Diné bizaad shił bééhózin - I know Navajo language
+- Bilagáana bizaad shił bééhózin - I know English
+- Yádíłti' - Talk! (imperative)
+- Níłtsé - Listen!
+
+
+PART 6: DINÉ BIZAAD IN DAILY LIFE
+================================================================================
+
+AT HOME:
+
+- Shighan góne' - Inside my home
+- Shighan bikáá' - On top of my home
+- Tó bee nílí - Bring water
+- Ch'iyáán yíł'į́ - Prepare food
+- Naa'ní - Work (verb)
+- Na'nish - Work (noun)
+- Béésh ííł'į́ - Make a fire
+- Ch'ééh - Outside
+- Kin - House / hogan
+
+CEREMONIAL PHRASES:
+
+- Hózhóogo naashá - I walk in beauty
+- Hózhó náhásdlį́į́ - Harmony is restored
+- Tádídíín - Corn pollen (offering)
+- Nizhóní - It is beautiful / it is good
+- Ahé'hee - Thank you (used in prayers)
+- Yá'át'ééh - It is good (often used in prayers)
+
+COMMANDS:
+
+- Naa'ní - Work!
+- Yá'át'ééh - Be good! (also "hello")
+- Naashá - Go! (on foot)
+- Ch'ééh nááyá - Go outside!
+- Tó bił ní - Bring water
+- Níłtsé - Listen!
+- Níłch'į - Look!
+- Nízhóní - Make it good!
+- Bééhózin - Know it! (memorize)
+- Yádíłti' - Speak!
+
+
+PART 7: NAVAJO LANGUAGE LEARNING RESOURCES
+================================================================================
+
+ONLINE RESOURCES:
+
+- Navajo Language Academy: navajolanguageacademy.org
+- Navajo Nation Diné Bizaad: opvp.navajo-nsn.gov/dine-bizaad/
+- Diné Bizaad Mobile App (iPhone/Android)
+- Navajo Language Immersion School resources
+- Navajo Dictionary Online (various sites)
+- YouTube: "Navajo Language Lessons" (multiple channels)
+- Duolingo Navajo course (in development)
+
+PRINT RESOURCES:
+
+DICTIONARIES:
+- "The Navajo Language: A Grammar and Colloquial Dictionary" (Young & Morgan) - the standard reference
+- "Navajo-English Dictionary" (Leon Wall)
+- "Concise Navajo Dictionary" (Alyse Neundorf)
+
+TEXTBOOKS:
+- "Diné Bizaad Bínáhoo’aah: Rediscovering the Navajo Language" (Salina Bookshelf)
+- "Navajo for Beginners" (Irvy Goossen)
+- "Diné Bizaad: Speak, Read, Write Navajo" (Alan Wilson)
+
+CHILDREN'S BOOKS:
+- "My Navajo Book" series (Salina Bookshelf)
+- "Navajo Children's Dictionary" (various)
+- Bilingual Navajo-English storybooks
+
+APPS:
+- Navajo Language App (Navajo Nation)
+- Diné Bizaad (iOS/Android)
+- Navajo Dictionary App (multiple)
+- Memrise Navajo course
+- Anki Navajo flashcards
+
+LEARNING STRATEGIES:
+
+For beginners:
+1. Start with pronunciation (tones are critical)
+2. Learn common phrases before grammar
+3. Practice listening before speaking
+4. Use recordings of fluent speakers
+5. Learn the clan introduction first
+
+For intermediate learners:
+1. Study the verb system (most important)
+2. Practice with fluent speakers
+3. Attend Navajo language events
+4. Read bilingual texts
+5. Write daily in Navajo
+
+For advanced learners:
+1. Study ceremonial language (with proper guidance)
+2. Read original Navajo texts
+3. Translate English to Navajo
+4. Teach others
+5. Participate in immersion programs
+
+IMMERSION PROGRAMS:
+
+- Tséhootsooí Diné Language Immersion School (Fort Defiance, AZ)
+- Navajo Language Immersion (various community programs)
+- Diné College Navajo language courses
+- Navajo Nation Summer Language Camps
+- Online immersion (COVID-era programs)
+
+
+PART 8: DIALECTS AND VARIATION
+================================================================================
+
+Navajo has regional dialects, though all are mutually intelligible.
+
+MAJOR DIALECTS:
+
+Eastern dialect (New Mexico):
+- Slightly different vocabulary
+- Some pronunciation differences
+- Example: "sheep" - dibé (east) vs. dibé (west - same in writing, different tone)
+
+Western dialect (Arizona):
+- Considered the "standard" for many programs
+- Used in most teaching materials
+- Example: "water" - tó (same across dialects)
+
+Northern dialect (Utah/Colorado):
+- Smallest number of speakers
+- Some unique vocabulary
+- Influenced by Southern Paiute
+
+CENTRAL NAVAJO (Navajo Nation capital area):
+- Blends features of Eastern and Western
+- Used in government and media
+- What most learners are taught
+
+DIALECT DIFFERENCES:
+
+- Vocabulary: some words vary by region
+- Pronunciation: slight tone differences
+- Grammar: mostly identical
+- Loanwords: varies by neighboring tribes
+
+Learners should focus on one dialect initially, then learn variations.
+
+
+PART 9: ENDANGERMENT AND REVITALIZATION
+================================================================================
+
+CURRENT STATUS:
+
+- UNESCO classification: Definitely Endangered
+- Number of speakers: ~148,530 (down from ~200,000 in 1970s)
+- Percentage of Navajo population who speak the language: ~54%
+- Most fluent speakers are over age 50
+- Few children are learning Navajo as their first language
+- Navajo is no longer the primary language in most Navajo homes
+
+CAUSES OF LANGUAGE LOSS:
+
+- Boarding schools (forbade Navajo language)
+- Economic pressures (English required for jobs)
+- Media and technology (primarily English)
+- Intermarriage (English-speaking partners)
+- Urban migration (away from Navajo communities)
+- Shame (past generations were punished for speaking Navajo)
+
+REVITALIZATION EFFORTS:
+
+- Navajo Nation Language Preservation Act (1990)
+- Diné Language Immersion Schools
+- Navajo Language Teacher Training Program
+- Diné College Navajo language degrees
+- Navajo Nation Radio (KTNN) - Navajo language programs
+- Navajo language apps and online resources
+- Head Start Navajo language programs
+- Navajo language summer camps
+- Master-Apprentice Program (adult learners)
+- Navajo Language Academy
+
+WHAT YOU CAN DO:
+
+- Learn Navajo (even basics)
+- Support Navajo language programs
+- Use Navajo words when possible
+- Encourage Navajo speakers to teach
+- Advocate for funding
+- Share resources
+- Respect the language as sacred
+
+
+PART 10: DINÉ BIZAAD CULTURAL NOTE
+================================================================================
+
+The Navajo language is considered sacred.
+
+WHY THE LANGUAGE IS SACRED:
+
+- The Holy People (Diyin Dineʼé) speak Diné Bizaad
+- Ceremonies must be performed in Navajo
+- The creation story (Diné Bahaneʼ) is in Navajo
+- Prayers are ineffective in other languages
+- The language itself contains spiritual power
+
+LANGUAGE AND IDENTITY:
+
+- Speaking Navajo is an act of Diné identity
+- The language contains Diné worldview
+- Concepts like Hózhó cannot be fully translated
+- K'é (kinship) is embedded in the grammar
+- Clan relationships are expressed through language
+
+RESPECTFUL LANGUAGE LEARNING:
+
+- Acknowledge that Navajo is sacred
+- Learn from fluent speakers respectfully
+- Do not use ceremonial language casually
+- Pay for lessons (language has value)
+- Give credit to teachers and sources
+- Never mock or parody the language
+
+As the elders say: "Diné Bizaad éí nihił ni' - The Navajo language is our identity."
+
+Sources: Navajo Nation Division of Education, Diné College, Navajo Language Academy, "The Navajo Language" (Young & Morgan), "Diné Bizaad Bínáhoo’aah" (Salina Bookshelf).
+
+
