@@ -470,7 +470,6 @@ def generate_answer(question: str, sources):
                 <li>Who is Black God?</li>
                 <li>What is k'é?</li>
                 <li>Tell me about Coyote</li>
-                <li>What does hózhó mean?</li>
             </ul>
         </div>
         """
@@ -482,7 +481,7 @@ def generate_answer(question: str, sources):
     output.append(f'<p><strong>📖 Question:</strong> {question}</p>')
     output.append('<hr>')
     
-    # Show sources (separate local from web)
+    # Show sources
     local_sources = [s for s in sources if s.get('source_type') == 'local']
     web_sources = [s for s in sources if s.get('source_type') != 'local']
     
@@ -504,28 +503,107 @@ def generate_answer(question: str, sources):
     
     output.append('<hr>')
     
-    # Show content from the best source
+    # Show content from the best source - SKIP HEADERS and find REAL content
     best_source = sources[0]
     text = best_source.get('text', '')
     source_label = best_source.get('label', 'Source')
+    source_type = best_source.get('source_type', 'web')
     
     if text:
+        # Clean the text - remove Gutenberg headers and footers
+        lines = text.split('\n')
+        content_lines = []
+        skip_header = True
+        
+        # Keywords that indicate we're past the header
+        content_start_markers = [
+            "coyote", "once upon", "long ago", "there lived", "story", 
+            "legend", "tale", "myth", "tradition", "according to"
+        ]
+        
+        # Keywords that indicate we're in footer/end matter
+        footer_markers = [
+            "end of the project gutenberg", "end of this project gutenberg", 
+            "*** end", "end of the ebook", "end of this ebook",
+            "produced by", "distributed proofreading", "copyright"
+        ]
+        
+        for line in lines:
+            line_lower = line.lower()
+            
+            # Check if this line signals start of content
+            if skip_header:
+                if any(marker in line_lower for marker in content_start_markers):
+                    skip_header = False
+                    # Add this line as it's the start
+                    content_lines.append(line)
+                continue
+            
+            # Stop at footer
+            if any(marker in line_lower for marker in footer_markers):
+                break
+            
+            # Skip very short lines and empty lines
+            if len(line.strip()) < 30:
+                continue
+            
+            content_lines.append(line)
+        
+        # If we didn't find a clear start, just use the first substantial paragraphs
+        if not content_lines:
+            for line in lines:
+                if len(line.strip()) > 80:
+                    content_lines.append(line)
+                if len(content_lines) >= 10:
+                    break
+        
+        # Join back into text
+        clean_text = '\n'.join(content_lines)
+        
         # Split into paragraphs
-        paragraphs = [p for p in text.split('\n\n') if len(p) > 100]
+        paragraphs = [p for p in clean_text.split('\n\n') if len(p) > 100]
+        if not paragraphs:
+            paragraphs = [p for p in clean_text.split('\n') if len(p) > 100]
+        
         if paragraphs:
             output.append(f'<p><strong>📖 Information from {source_label}:</strong></p>')
-            for p in paragraphs[:4]:
-                clean_p = re.sub(r'\s+', ' ', p)
-                if len(clean_p) > 600:
-                    clean_p = clean_p[:600] + "..."
-                output.append(f'<blockquote style="background: #f9f9f9; padding: 12px; border-left: 3px solid #2c5f2d; margin: 10px 0;">{clean_p}</blockquote>')
+            
+            # For Coyote questions, specifically look for Coyote-related paragraphs
+            if "coyote" in question.lower():
+                coyote_paragraphs = []
+                for p in paragraphs:
+                    if "coyote" in p.lower():
+                        coyote_paragraphs.append(p)
+                
+                if coyote_paragraphs:
+                    for p in coyote_paragraphs[:4]:
+                        clean_p = re.sub(r'\s+', ' ', p)
+                        if len(clean_p) > 800:
+                            clean_p = clean_p[:800] + "..."
+                        output.append(f'<blockquote style="background: #f9f9f9; padding: 12px; border-left: 3px solid #2c5f2d; margin: 10px 0;">{clean_p}</blockquote>')
+                else:
+                    # Show first few paragraphs if no specific Coyote content found
+                    for p in paragraphs[:4]:
+                        clean_p = re.sub(r'\s+', ' ', p)
+                        if len(clean_p) > 800:
+                            clean_p = clean_p[:800] + "..."
+                        output.append(f'<blockquote style="background: #f9f9f9; padding: 12px; border-left: 3px solid #2c5f2d; margin: 10px 0;">{clean_p}</blockquote>')
+            else:
+                # General case - show top paragraphs
+                for p in paragraphs[:4]:
+                    clean_p = re.sub(r'\s+', ' ', p)
+                    if len(clean_p) > 800:
+                        clean_p = clean_p[:800] + "..."
+                    output.append(f'<blockquote style="background: #f9f9f9; padding: 12px; border-left: 3px solid #2c5f2d; margin: 10px 0;">{clean_p}</blockquote>')
+        else:
+            output.append(f'<p><em>No readable content could be extracted from {source_label}.</em></p>')
     
     # Show principles if detected
     if principles:
         output.append('<hr>')
         output.append('<p><strong>🏔️ Cultural Principles Detected:</strong></p>')
         output.append('<ul>')
-        for p, data in principles.items():
+        for p, data in list(principles.items())[:4]:
             output.append(f'<li><strong>{p}</strong> - {data["hits"]} occurrences</li>')
         output.append('</ul>')
     
