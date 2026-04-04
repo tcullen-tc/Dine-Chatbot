@@ -962,4 +962,4 @@ if __name__ == "__main__":
     print(f"📁 Documents folder: {DOCUMENTS_FOLDER}")
     print(f"📚 Local documents: {len(ALL_DOCS)}")
     print(f"🔒 Approved domains: {len(APPROVED_DOMAINS)}")
-    print(f"
+    print(f"🤖 OpenAI available: {OPENAI_AVAILABLE}")
