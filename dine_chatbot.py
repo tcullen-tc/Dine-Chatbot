@@ -6,7 +6,9 @@ import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 import threading
-from flask import Flask, request, render_template_string
+from datetime import datetime, timedelta
+from flask import Flask, request, render_template_string, session, jsonify
+import json
 
 # Try to import OpenAI
 try:
@@ -18,12 +20,110 @@ except ImportError:
     print("⚠️ OpenAI not installed. Run: pip install openai")
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dine-chatbot-secret-key-change-in-production')
 
 DID_YOU_KNOW_FACTS = [
     "The Navajo language was used as a code during WWII by the famous Code Talkers - it was never broken!",
     "K'é (kinship) extends beyond blood relations to include all of creation.",
     "Hózhó is often translated as 'beauty' but encompasses harmony, balance, and wellness.",
+    "The four sacred mountains mark the boundaries of traditional Dinétah.",
+    "Weaving was taught to the Navajo by Spider Woman, a holy being.",
 ]
+
+# ----------------------------
+# DOCUMENT PRIORITY SCORES
+# ----------------------------
+DOCUMENT_PRIORITY = {
+    "black_god_info": 100,
+    "hero_twins_story": 100,
+    "coyote_info": 100,
+    "hair_bun_info": 100,
+    "dine_philosophy_hozho": 95,
+    "dine_ceremonies_healing": 95,
+    "dine_history_heroes": 95,
+    "dine_oral_traditions": 85,
+    "dine_clan_etiquette": 90,
+    "dine_education": 85,
+    "dine_sacred_places": 90,
+    "dine_songs_music": 85,
+    "dine_daily_life": 85,
+    "dine_family_life": 90,
+    "dine_government": 85,
+    "dine_economy": 85,
+    "dine_health_medicine": 85,
+    "dine_contemporary_issues": 85,
+    "american_indian_fairy_tales": 30,
+    "north_american_indian_folklore": 30,
+}
+
+# ----------------------------
+# TOPIC KEYWORDS FOR SUGGESTIONS
+# ----------------------------
+TOPIC_SUGGESTIONS = {
+    "black god": [
+        "What is the Night Way ceremony?",
+        "How were the stars created?",
+        "Who is Coyote in Diné stories?",
+        "What is the significance of the Pleiades?",
+        "Who are the other Holy People?"
+    ],
+    "hero twins": [
+        "What monsters did the Hero Twins defeat?",
+        "Who is Changing Woman?",
+        "What weapons did the Hero Twins receive?",
+        "Where did the Hero Twins journey?",
+        "What is the story of Monster Slayer?"
+    ],
+    "coyote": [
+        "Why did Coyote scatter the stars?",
+        "What are some Coyote stories?",
+        "Why are Coyote stories told in winter?",
+        "What does Coyote represent in Diné culture?",
+        "Who is Ma'ii?"
+    ],
+    "k'é": [
+        "How do I introduce myself in Navajo?",
+        "What are the four original clans?",
+        "How does the clan system work?",
+        "What is the importance of family in Diné culture?",
+        "How do you say grandmother in Navajo?"
+    ],
+    "hozho": [
+        "What are the four elements of Hózhó?",
+        "What does walking in beauty mean?",
+        "What is the Blessing Way ceremony?",
+        "How do Diné people practice Hózhó daily?",
+        "What is the Hózhóójí prayer?"
+    ],
+    "long walk": [
+        "What was the Treaty of 1868?",
+        "Who was Barboncito?",
+        "Who was Manuelito?",
+        "What happened at Bosque Redondo?",
+        "How did the Diné return home?"
+    ],
+    "weaving": [
+        "Who taught the Navajo to weave?",
+        "What is the spirit line in weaving?",
+        "What are the different weaving patterns?",
+        "What do the colors in Navajo rugs mean?",
+        "Who was Spider Woman?"
+    ],
+    "code talkers": [
+        "How did the Navajo code work?",
+        "Who were the original 29 Code Talkers?",
+        "Why was the code never broken?",
+        "When were the Code Talkers recognized?",
+        "What battles did Code Talkers serve in?"
+    ],
+    "hair bun": [
+        "What is Tsiiyéél?",
+        "How is the Navajo hair bun made?",
+        "What does the hair bun symbolize?",
+        "Do Navajo men wear hair buns?",
+        "When is the hair bun worn?"
+    ]
+}
 
 # ----------------------------
 # APPROVED DINÉ DOMAINS
@@ -43,9 +143,34 @@ APPROVED_DOMAINS = [
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
 # ----------------------------
+# RATE LIMITING
+# ----------------------------
+user_requests = {}
+
+def check_rate_limit(user_id):
+    """Prevent abuse - limit to 10 requests per minute"""
+    now = datetime.now()
+    if user_id in user_requests:
+        requests = [t for t in user_requests[user_id] if now - t < timedelta(minutes=1)]
+        user_requests[user_id] = requests
+        if len(requests) >= 10:
+            return False
+    else:
+        user_requests[user_id] = []
+    user_requests[user_id].append(now)
+    return True
+
+# ----------------------------
 # LOCAL DOCUMENTS FOLDER
 # ----------------------------
 DOCUMENTS_FOLDER = os.path.join(os.path.dirname(__file__), "dine_documents")
+
+def chunk_document(content, chunk_size=2000):
+    """Split large documents into smaller chunks for better retrieval"""
+    chunks = []
+    for i in range(0, len(content), chunk_size):
+        chunks.append(content[i:i+chunk_size])
+    return chunks
 
 def load_all_documents():
     docs = []
@@ -57,11 +182,21 @@ def load_all_documents():
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
+            name = os.path.basename(file_path).replace('.txt', '')
+            
+            # Get priority score
+            priority = DOCUMENT_PRIORITY.get(name, 50)
+            
+            # Split into chunks for large documents
+            chunks = chunk_document(content)
+            
             docs.append({
-                "name": os.path.basename(file_path).replace('.txt', ''),
-                "content": content
+                "name": name,
+                "content": content,
+                "priority": priority,
+                "chunks": chunks
             })
-            print(f"✅ Loaded: {os.path.basename(file_path)}")
+            print(f"✅ Loaded: {os.path.basename(file_path)} (priority: {priority})")
         except Exception as e:
             print(f"❌ Error: {e}")
     return docs
@@ -148,7 +283,7 @@ def search_web(question):
 # ----------------------------
 # FIND RELEVANT SOURCES
 # ----------------------------
-def find_relevant_sources(question):
+def find_relevant_sources(question, max_sources=5):
     question_lower = question.lower()
     
     stop_words = {'what', 'who', 'how', 'why', 'when', 'where', 'is', 'are', 'was', 'were',
@@ -158,24 +293,41 @@ def find_relevant_sources(question):
     words = question_lower.split()
     keywords = [w for w in words if w not in stop_words and len(w) > 2]
     
+    # Add 2-3 word phrases
+    phrases = []
+    for i in range(len(words) - 1):
+        phrase = f"{words[i]} {words[i+1]}"
+        if len(phrase) > 5:
+            phrases.append(phrase)
+    
+    all_keywords = list(set(keywords + phrases))
+    
     scored = []
     for doc in ALL_DOCS:
         content_lower = doc['content'].lower()
         score = 0
-        for kw in keywords:
+        
+        # Keyword matching
+        for kw in all_keywords:
             score += content_lower.count(kw) * 10
+        
+        # Priority boost
+        score += doc.get('priority', 50)
+        
         if score > 0:
             scored.append({
                 "score": score,
                 "title": doc['name'],
                 "content": doc['content'],
-                "type": "local"
+                "type": "local",
+                "priority": doc.get('priority', 50)
             })
     
     scored.sort(key=lambda x: x['score'], reverse=True)
-    sources = scored[:3]
+    sources = scored[:max_sources]
     
-    if len(sources) < 2:
+    # Add web results if needed
+    if len(sources) < 3:
         web_results = search_web(question)
         for r in web_results:
             sources.append({
@@ -186,31 +338,73 @@ def find_relevant_sources(question):
                 "url": r['url']
             })
     
-    return sources
+    return sources[:max_sources]
+
+# ----------------------------
+# GET CONFIDENCE SCORE
+# ----------------------------
+def get_confidence(sources):
+    if not sources:
+        return "low", 0
+    top_score = sources[0].get('score', 0)
+    if top_score > 1000:
+        return "high", min(100, int(top_score / 100))
+    elif top_score > 200:
+        return "medium", min(100, int(top_score / 20))
+    return "low", min(100, int(top_score / 5))
+
+# ----------------------------
+# GET SUGGESTED QUESTIONS
+# ----------------------------
+def get_suggested_questions(question):
+    question_lower = question.lower()
+    for topic, suggestions in TOPIC_SUGGESTIONS.items():
+        if topic in question_lower:
+            return suggestions[:3]
+    return [
+        "Who are the Hero Twins?",
+        "Who is Black God?",
+        "What is k'é?",
+        "What does hózhó mean?",
+        "Tell me about Navajo weaving"
+    ]
 
 # ----------------------------
 # GENERATE ANSWER WITH OPENAI
 # ----------------------------
-def generate_answer(question, sources):
+def generate_answer(question, sources, deep_dive=False):
     if not sources:
-        return "No relevant sources found. Try asking about Hero Twins, Black God, Coyote, or k'é."
+        return None, []
     
     # Build context from sources
     context = ""
+    source_names = []
+    source_urls = []
+    
+    max_content = 4000 if deep_dive else 2000
+    
     for i, s in enumerate(sources[:4], 1):
-        context += f"\n--- Source {i}: {s.get('title', 'Unknown')} ---\n"
-        content = s.get('content', '')[:2000]
+        name = s.get('title', 'Unknown')
+        source_names.append(f"[{i}] {name}")
+        if s.get('type') == 'web' and s.get('url'):
+            source_urls.append(s.get('url'))
+        context += f"\n--- Source {i}: {name} ---\n"
+        content = s.get('content', '')[:max_content]
         context += content + "\n"
+    
+    confidence, confidence_score = get_confidence(sources)
+    max_tokens = 800 if deep_dive else 500
     
     # Try OpenAI first
     if OPENAI_AVAILABLE:
         try:
-            # Get API key from environment
             openai.api_key = os.environ.get("OPENAI_API_KEY")
             
             prompt = f"""You are a helpful assistant answering questions about Diné (Navajo) culture.
 
 Answer the question based ONLY on the source documents below. If the answer is not in the sources, say "I don't have information about that in my sources."
+
+Be accurate, respectful, and helpful. Use specific details from the sources.
 
 SOURCES:
 {context}
@@ -223,9 +417,22 @@ ANSWER:"""
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=500
+                max_tokens=max_tokens
             )
-            return response.choices[0].message.content
+            answer = response.choices[0].message.content
+            
+            # Add confidence indicator
+            if confidence == "high":
+                answer += f"\n\n---\n✅ **Confidence:** High (based on {len(sources)} relevant sources)"
+            elif confidence == "medium":
+                answer += f"\n\n---\n⚠️ **Confidence:** Medium (based on {len(sources)} sources)"
+            else:
+                answer += f"\n\n---\n❓ **Confidence:** Low (limited sources available)"
+            
+            # Add citations
+            answer += f"\n📚 **Sources:** {', '.join(source_names)}"
+            
+            return answer, source_urls
         except Exception as e:
             print(f"OpenAI error: {e}")
     
@@ -235,7 +442,12 @@ ANSWER:"""
     text = re.sub(r'\s+', ' ', text)
     if len(text) > 800:
         text = text[:800] + "..."
-    return text
+    
+    answer = text
+    answer += f"\n\n---\n⚠️ **Note:** Using simplified mode (OpenAI unavailable)"
+    answer += f"\n📚 **Source:** {source_names[0] if source_names else 'Unknown'}"
+    
+    return answer, source_urls
 
 # ----------------------------
 # HTML TEMPLATE
@@ -289,6 +501,12 @@ HTML_TEMPLATE = """
             resize: vertical;
         }
         textarea:focus { outline: none; border-color: #2c5f2d; }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
         .submit-btn {
             background: #2c5f2d;
             color: white;
@@ -297,10 +515,19 @@ HTML_TEMPLATE = """
             border-radius: 25px;
             font-size: 16px;
             cursor: pointer;
-            margin-top: 15px;
+        }
+        .deep-dive-btn {
+            background: #f39c12;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            cursor: pointer;
         }
         .submit-btn:hover:not(:disabled) { background: #1e3a1e; }
-        .submit-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+        .deep-dive-btn:hover:not(:disabled) { background: #e67e22; }
+        .submit-btn:disabled, .deep-dive-btn:disabled { background: #95a5a6; cursor: not-allowed; }
         .example-buttons {
             display: flex;
             flex-wrap: wrap;
@@ -346,7 +573,69 @@ HTML_TEMPLATE = """
             border-left: 3px solid #2c5f2d;
             font-size: 16px;
             line-height: 1.6;
+            white-space: pre-wrap;
         }
+        .answer-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .action-btn {
+            background: none;
+            border: 1px solid #2c5f2d;
+            color: #2c5f2d;
+            padding: 5px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .action-btn:hover { background: #2c5f2d; color: white; }
+        .feedback {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #666;
+        }
+        .feedback-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            margin-left: 10px;
+        }
+        .related {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f5e9;
+            border-radius: 8px;
+        }
+        .related-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #2c5f2d;
+            margin-bottom: 8px;
+        }
+        .related-question {
+            background: white;
+            border: none;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .related-question:hover { background: #2c5f2d; color: white; }
+        .confidence {
+            font-size: 12px;
+            margin-top: 10px;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .confidence-high { background: #d5f5e3; color: #27ae60; }
+        .confidence-medium { background: #fef9e7; color: #f39c12; }
+        .confidence-low { background: #fdedec; color: #e74c3c; }
         .fact-box {
             background: #fff3e0;
             padding: 15px;
@@ -372,6 +661,20 @@ HTML_TEMPLATE = """
             border-radius: 12px;
             margin-left: 8px;
         }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #2c5f2d;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
     </style>
 </head>
 <body>
@@ -388,12 +691,15 @@ HTML_TEMPLATE = """
             </div>
             
             <form method="POST" id="questionForm">
-                <textarea name="question" placeholder="Example: Who are the Hero Twins? Who is Black God? What is k'é?" rows="4">{{ question }}</textarea>
-                <div>
+                <textarea name="question" placeholder="Example: Who are the Hero Twins? Who is Black God? What is k'é?" rows="4" id="questionInput">{{ question }}</textarea>
+                <div class="button-group">
                     <button type="submit" class="submit-btn" id="submitBtn">🔍 Ask Question</button>
-                    <div id="loadingIndicator" style="display: none; margin-left: 15px;">
-                        <span class="loading-spinner"></span> Searching sources...
-                    </div>
+                    <button type="button" class="deep-dive-btn" id="deepDiveBtn">🔬 Deep Dive</button>
+                    <button type="button" class="action-btn" id="voiceBtn">🎤 Voice Input</button>
+                    <button type="button" class="action-btn" id="randomBtn">🎲 Surprise Me</button>
+                </div>
+                <div id="loadingIndicator" style="display: none; margin-top: 10px;">
+                    <span class="loading-spinner"></span> Searching sources and generating answer...
                 </div>
             </form>
             
@@ -402,12 +708,32 @@ HTML_TEMPLATE = """
                 <button class="example-btn" data-question="Who is Black God?">⭐ Black God</button>
                 <button class="example-btn" data-question="Who is Coyote?">🦊 Coyote</button>
                 <button class="example-btn" data-question="What is k'é?">🤝 What is k'é?</button>
+                <button class="example-btn" data-question="What does hózhó mean?">☯️ Hózhó</button>
                 <button class="example-btn" data-question="What is the Long Walk?">👣 Long Walk</button>
+                <button class="example-btn" data-question="What is the hair bun called?">💇 Hair Bun</button>
             </div>
             
             {% if answer %}
             <div class="answer">
                 <blockquote>{{ answer | safe }}</blockquote>
+                <div class="answer-actions">
+                    <button class="action-btn" onclick="copyAnswer()">📋 Copy Answer</button>
+                    <button class="action-btn" onclick="speakAnswer()">🔊 Read Aloud</button>
+                </div>
+                <div class="feedback">
+                    Was this helpful?
+                    <button class="feedback-btn" onclick="feedback('yes')">👍 Yes</button>
+                    <button class="feedback-btn" onclick="feedback('no')">👎 No</button>
+                    <span id="feedbackMsg" style="margin-left: 10px;"></span>
+                </div>
+                {% if related %}
+                <div class="related">
+                    <div class="related-title">📌 Related Questions</div>
+                    {% for q in related %}
+                    <button class="related-question" data-question="{{ q }}">{{ q }}</button>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
             {% endif %}
             
@@ -420,56 +746,220 @@ HTML_TEMPLATE = """
             🔒 Search restricted to {{ domain_count }} approved Diné cultural domains + {{ doc_count }} local documents
         </div>
     </div>
+    <div id="toast" class="toast"></div>
+    
     <script>
-        document.querySelectorAll('.example-btn').forEach(btn => {
+        // Example buttons
+        document.querySelectorAll('.example-btn, .related-question').forEach(btn => {
             btn.addEventListener('click', function() {
-                document.getElementById('questionInput').value = this.dataset.question;
-                document.getElementById('submitBtn').disabled = true;
-                document.getElementById('loadingIndicator').style.display = 'inline-block';
-                document.getElementById('questionForm').submit();
+                if(this.dataset.question) {
+                    document.getElementById('questionInput').value = this.dataset.question;
+                    document.getElementById('submitBtn').click();
+                }
             });
         });
+        
+        // Form submission
         document.getElementById('questionForm').addEventListener('submit', function() {
+            if (!document.getElementById('questionInput').value.trim()) {
+                alert('Please enter a question');
+                event.preventDefault();
+                return false;
+            }
             document.getElementById('submitBtn').disabled = true;
-            document.getElementById('loadingIndicator').style.display = 'inline-block';
+            document.getElementById('deepDiveBtn').disabled = true;
+            document.getElementById('loadingIndicator').style.display = 'block';
+        });
+        
+        // Deep Dive mode
+        document.getElementById('deepDiveBtn').addEventListener('click', function() {
+            let question = document.getElementById('questionInput').value.trim();
+            if (!question) {
+                alert('Please enter a question first');
+                return;
+            }
+            // Add deep dive parameter
+            let form = document.getElementById('questionForm');
+            let input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'deep_dive';
+            input.value = 'true';
+            form.appendChild(input);
+            form.submit();
+        });
+        
+        // Voice input
+        document.getElementById('voiceBtn').addEventListener('click', function() {
+            if ('webkitSpeechRecognition' in window) {
+                const recognition = new webkitSpeechRecognition();
+                recognition.lang = 'en-US';
+                recognition.onresult = (event) => {
+                    document.getElementById('questionInput').value = event.results[0][0].transcript;
+                };
+                recognition.start();
+            } else {
+                alert('Voice input not supported in this browser');
+            }
+        });
+        
+        // Random question
+        document.getElementById('randomBtn').addEventListener('click', function() {
+            const questions = [
+                "Who are the Hero Twins?",
+                "Who is Black God?",
+                "What is k'é?",
+                "What does hózhó mean?",
+                "Tell me about Navajo weaving",
+                "What is the Long Walk?",
+                "Who were the Code Talkers?",
+                "What is the hair bun called?",
+                "What are the four sacred mountains?"
+            ];
+            const random = questions[Math.floor(Math.random() * questions.length)];
+            document.getElementById('questionInput').value = random;
+            document.getElementById('submitBtn').click();
+        });
+        
+        // Copy answer
+        function copyAnswer() {
+            const answerText = document.querySelector('.answer blockquote').innerText;
+            navigator.clipboard.writeText(answerText);
+            showToast('✅ Answer copied to clipboard!');
+        }
+        
+        // Speak answer
+        function speakAnswer() {
+            const answerText = document.querySelector('.answer blockquote').innerText;
+            const utterance = new SpeechSynthesisUtterance(answerText);
+            speechSynthesis.speak(utterance);
+        }
+        
+        // Feedback
+        function feedback(type) {
+            fetch('/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ feedback: type, question: document.getElementById('questionInput').value })
+            });
+            document.getElementById('feedbackMsg').innerText = 'Thank you for your feedback! 🙏';
+            setTimeout(() => {
+                document.getElementById('feedbackMsg').innerText = '';
+            }, 3000);
+        }
+        
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+        
+        window.addEventListener('load', function() {
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('deepDiveBtn').disabled = false;
+            document.getElementById('loadingIndicator').style.display = 'none';
         });
     </script>
 </body>
 </html>
 """
 
+# ----------------------------
+# FEEDBACK STORAGE (simple - in production use a database)
+# ----------------------------
+feedback_storage = []
+
+@app.route('/feedback', methods=['POST'])
+def handle_feedback():
+    data = request.get_json()
+    feedback_storage.append({
+        "question": data.get('question'),
+        "feedback": data.get('feedback'),
+        "timestamp": datetime.now().isoformat()
+    })
+    return jsonify({"status": "ok"})
+
+# ----------------------------
+# FLASK ROUTES
+# ----------------------------
+@app.errorhandler(Exception)
+def handle_exception(e):
+    print(f"Error: {e}")
+    return f"An error occurred: {str(e)}", 500
+
 @app.route('/', methods=['GET', 'POST'])
 def home():
     question = ""
     answer = None
+    related = None
     random_fact = random.choice(DID_YOU_KNOW_FACTS)
+    
+    # Rate limiting
+    client_ip = request.remote_addr
+    if not check_rate_limit(client_ip):
+        return "Rate limit exceeded. Please wait a moment before asking another question.", 429
     
     if request.method == 'POST':
         question = request.form.get('question', '').strip()
+        deep_dive = request.form.get('deep_dive', 'false') == 'true'
         
         if question:
             print(f"\n{'='*50}")
             print(f"📖 QUESTION: {question}")
+            print(f"🔬 Deep Dive: {deep_dive}")
             print(f"{'='*50}")
             
-            sources = find_relevant_sources(question)
+            max_sources = 8 if deep_dive else 5
+            sources = find_relevant_sources(question, max_sources)
             print(f"Found {len(sources)} relevant sources")
             
-            answer = generate_answer(question, sources)
+            answer_text, source_urls = generate_answer(question, sources, deep_dive)
+            answer = answer_text
+            
+            # Get related questions
+            related = get_suggested_questions(question)
+            
+            # Store conversation in session
+            if 'conversation' not in session:
+                session['conversation'] = []
+            session['conversation'].append({
+                "question": question,
+                "answer": answer[:500]  # Store preview
+            })
+            # Keep only last 10
+            session['conversation'] = session['conversation'][-10:]
     
     return render_template_string(HTML_TEMPLATE, 
                                    question=question, 
-                                   answer=answer, 
+                                   answer=answer,
+                                   related=related,
                                    random_fact=random_fact,
                                    doc_count=len(ALL_DOCS),
                                    domain_count=len(APPROVED_DOMAINS))
 
+# ----------------------------
+# RANDOM QUESTION ENDPOINT
+# ----------------------------
+@app.route('/random-question')
+def random_question():
+    import random as rand
+    questions = [
+        "Who are the Hero Twins?",
+        "Who is Black God?",
+        "What is k'é?",
+        "What does hózhó mean?",
+        "Tell me about Navajo weaving",
+        "What is the Long Walk?",
+        "Who were the Code Talkers?",
+        "What is the hair bun called?",
+        "What are the four sacred mountains?"
+    ]
+    return jsonify({"question": rand.choice(questions)})
+
 if __name__ == "__main__":
     print(f"\n{'='*60}")
-    print(f"🌾 Diné Cultural Learning Bot")
+    print(f"🌾 Diné Cultural Learning Bot - Enhanced Edition")
     print(f"📁 Documents folder: {DOCUMENTS_FOLDER}")
     print(f"📚 Local documents: {len(ALL_DOCS)}")
     print(f"🔒 Approved domains: {len(APPROVED_DOMAINS)}")
-    print(f"🤖 OpenAI available: {OPENAI_AVAILABLE}")
-    print(f"{'='*60}\n")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print(f"
