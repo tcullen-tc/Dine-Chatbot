@@ -373,8 +373,10 @@ def get_suggested_questions(question):
 # GENERATE ANSWER WITH OPENAI
 # ----------------------------
 def generate_answer(question, sources, deep_dive=False):
+    """Generate an answer using OpenAI that SYNTHESIZES information from sources"""
+    
     if not sources:
-        return None, []
+        return "No relevant sources found. Please try a different question.", []
     
     # Build context from sources
     context = ""
@@ -392,19 +394,23 @@ def generate_answer(question, sources, deep_dive=False):
         content = s.get('content', '')[:max_content]
         context += content + "\n"
     
-    confidence, confidence_score = get_confidence(sources)
-    max_tokens = 800 if deep_dive else 500
-    
-    # Try OpenAI first
+    # TRY OPENAI FIRST - this is what makes the bot smart
     if OPENAI_AVAILABLE:
         try:
             openai.api_key = os.environ.get("OPENAI_API_KEY")
             
+            # This prompt tells OpenAI to SYNTHESIZE, not just extract
             prompt = f"""You are a helpful assistant answering questions about Diné (Navajo) culture.
 
-Answer the question based ONLY on the source documents below. If the answer is not in the sources, say "I don't have information about that in my sources."
+IMPORTANT: Your task is to SYNTHESIZE information from the sources below to answer the question. 
+Do not just quote the sources. Instead, combine the information to create a helpful, practical answer.
 
-Be accurate, respectful, and helpful. Use specific details from the sources.
+For questions like "how to make friends" or "how to have a successful marriage":
+- Look for information about k'é (kinship), respect, generosity, community responsibility
+- Explain how these Diné values apply to the situation
+- Give practical, actionable advice based on Diné teachings
+
+Answer based ONLY on the source documents below. If the information is not in the sources, say "Based on the available sources, I don't have specific information about that."
 
 SOURCES:
 {context}
@@ -416,27 +422,27 @@ ANSWER:"""
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=max_tokens
+                temperature=0.7,  # Slightly higher for more natural answers
+                max_tokens=800 if deep_dive else 600
             )
             answer = response.choices[0].message.content
             
-            # Add confidence indicator
+            # Add confidence and sources
+            confidence, confidence_score = get_confidence(sources)
             if confidence == "high":
-                answer += f"\n\n---\n✅ **Confidence:** High (based on {len(sources)} relevant sources)"
+                answer += f"\n\n---\n✅ Based on {len(sources)} sources from Diné cultural teachings."
             elif confidence == "medium":
-                answer += f"\n\n---\n⚠️ **Confidence:** Medium (based on {len(sources)} sources)"
+                answer += f"\n\n---\n📚 Based on {len(sources)} sources."
             else:
-                answer += f"\n\n---\n❓ **Confidence:** Low (limited sources available)"
-            
-            # Add citations
-            answer += f"\n📚 **Sources:** {', '.join(source_names)}"
+                answer += f"\n\n---\n📚 Sources used: {', '.join(source_names)}"
             
             return answer, source_urls
+            
         except Exception as e:
             print(f"OpenAI error: {e}")
+            # Fall through to fallback
     
-    # Fallback
+    # FALLBACK - simple text extraction (less helpful)
     best = sources[0]
     text = best.get('content', '')
     text = re.sub(r'\s+', ' ', text)
@@ -444,8 +450,8 @@ ANSWER:"""
         text = text[:800] + "..."
     
     answer = text
-    answer += f"\n\n---\n⚠️ **Note:** Using simplified mode (OpenAI unavailable)"
-    answer += f"\n📚 **Source:** {source_names[0] if source_names else 'Unknown'}"
+    answer += f"\n\n---\n⚠️ Note: Using simplified mode. For better answers, ensure OpenAI is configured."
+    answer += f"\n📚 Source: {source_names[0] if source_names else 'Unknown'}"
     
     return answer, source_urls
 
