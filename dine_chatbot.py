@@ -8,6 +8,15 @@ from html.parser import HTMLParser
 import threading
 from flask import Flask, request, render_template_string
 
+# Try to import OpenAI
+try:
+    import openai
+    import os as _os
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    print("⚠️ OpenAI not installed. Run: pip install openai")
+
 app = Flask(__name__)
 
 DID_YOU_KNOW_FACTS = [
@@ -137,13 +146,11 @@ def search_web(question):
         return []
 
 # ----------------------------
-# SIMPLE SEARCH - Find the most relevant document
+# FIND RELEVANT SOURCES
 # ----------------------------
-def find_best_answer(question):
-    """Simple search - returns the best matching document content"""
+def find_relevant_sources(question):
     question_lower = question.lower()
     
-    # Extract keywords (remove common words)
     stop_words = {'what', 'who', 'how', 'why', 'when', 'where', 'is', 'are', 'was', 'were',
                   'the', 'a', 'an', 'and', 'or', 'but', 'for', 'nor', 'so', 'yet', 'of',
                   'to', 'in', 'for', 'on', 'by', 'with', 'without', 'about', 'tell', 'me'}
@@ -151,22 +158,11 @@ def find_best_answer(question):
     words = question_lower.split()
     keywords = [w for w in words if w not in stop_words and len(w) > 2]
     
-    # Also add 2-word phrases
-    phrases = []
-    for i in range(len(words) - 1):
-        phrase = f"{words[i]} {words[i+1]}"
-        if len(phrase) > 5:
-            phrases.append(phrase)
-    
-    all_keywords = list(set(keywords + phrases))
-    print(f"🔍 Keywords: {all_keywords[:8]}")
-    
-    # Score all local documents
     scored = []
     for doc in ALL_DOCS:
         content_lower = doc['content'].lower()
         score = 0
-        for kw in all_keywords:
+        for kw in keywords:
             score += content_lower.count(kw) * 10
         if score > 0:
             scored.append({
@@ -176,11 +172,13 @@ def find_best_answer(question):
                 "type": "local"
             })
     
-    # Search web if no local results
-    if not scored:
+    scored.sort(key=lambda x: x['score'], reverse=True)
+    sources = scored[:3]
+    
+    if len(sources) < 2:
         web_results = search_web(question)
         for r in web_results:
-            scored.append({
+            sources.append({
                 "score": 50,
                 "title": r['title'],
                 "content": r['content'],
@@ -188,28 +186,56 @@ def find_best_answer(question):
                 "url": r['url']
             })
     
-    if not scored:
-        return None
+    return sources
+
+# ----------------------------
+# GENERATE ANSWER WITH OPENAI
+# ----------------------------
+def generate_answer(question, sources):
+    if not sources:
+        return "No relevant sources found. Try asking about Hero Twins, Black God, Coyote, or k'é."
     
-    # Sort by score
-    scored.sort(key=lambda x: x['score'], reverse=True)
-    best = scored[0]
+    # Build context from sources
+    context = ""
+    for i, s in enumerate(sources[:4], 1):
+        context += f"\n--- Source {i}: {s.get('title', 'Unknown')} ---\n"
+        content = s.get('content', '')[:2000]
+        context += content + "\n"
     
-    # Extract the first few paragraphs
-    content = best['content']
-    # Remove excessive whitespace
-    content = re.sub(r'\s+', ' ', content)
+    # Try OpenAI first
+    if OPENAI_AVAILABLE:
+        try:
+            # Get API key from environment
+            openai.api_key = os.environ.get("OPENAI_API_KEY")
+            
+            prompt = f"""You are a helpful assistant answering questions about Diné (Navajo) culture.
+
+Answer the question based ONLY on the source documents below. If the answer is not in the sources, say "I don't have information about that in my sources."
+
+SOURCES:
+{context}
+
+QUESTION: {question}
+
+ANSWER:"""
+            
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=500
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"OpenAI error: {e}")
     
-    # Take first 1000 characters
-    if len(content) > 1000:
-        content = content[:1000] + "..."
-    
-    return {
-        "text": content,
-        "source": best['title'],
-        "type": best['type'],
-        "url": best.get('url')
-    }
+    # Fallback
+    best = sources[0]
+    text = best.get('content', '')
+    text = re.sub(r'\s+', ' ', text)
+    if len(text) > 800:
+        text = text[:800] + "..."
+    return text
 
 # ----------------------------
 # HTML TEMPLATE
@@ -366,7 +392,7 @@ HTML_TEMPLATE = """
                 <div>
                     <button type="submit" class="submit-btn" id="submitBtn">🔍 Ask Question</button>
                     <div id="loadingIndicator" style="display: none; margin-left: 15px;">
-                        <span class="loading-spinner"></span> Searching...
+                        <span class="loading-spinner"></span> Searching sources...
                     </div>
                 </div>
             </form>
@@ -381,14 +407,7 @@ HTML_TEMPLATE = """
             
             {% if answer %}
             <div class="answer">
-                <blockquote>{{ answer.text | safe }}</blockquote>
-                <p><strong>📚 Source:</strong> 
-                {% if answer.type == 'local' %}
-                    📄 {{ answer.source }} (Local Document)
-                {% else %}
-                    🌐 <a href="{{ answer.url }}" target="_blank">{{ answer.source }}</a>
-                {% endif %}
-                </p>
+                <blockquote>{{ answer | safe }}</blockquote>
             </div>
             {% endif %}
             
@@ -433,14 +452,10 @@ def home():
             print(f"📖 QUESTION: {question}")
             print(f"{'='*50}")
             
-            answer = find_best_answer(question)
+            sources = find_relevant_sources(question)
+            print(f"Found {len(sources)} relevant sources")
             
-            if not answer:
-                answer = {
-                    "text": f"No information found about '{question}' in approved Diné sources. Try asking about Hero Twins, Black God, Coyote, or k'é.",
-                    "source": "None",
-                    "type": "local"
-                }
+            answer = generate_answer(question, sources)
     
     return render_template_string(HTML_TEMPLATE, 
                                    question=question, 
@@ -455,5 +470,6 @@ if __name__ == "__main__":
     print(f"📁 Documents folder: {DOCUMENTS_FOLDER}")
     print(f"📚 Local documents: {len(ALL_DOCS)}")
     print(f"🔒 Approved domains: {len(APPROVED_DOMAINS)}")
+    print(f"🤖 OpenAI available: {OPENAI_AVAILABLE}")
     print(f"{'='*60}\n")
     app.run(host='0.0.0.0', port=5000, debug=True)
