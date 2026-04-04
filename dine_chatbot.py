@@ -398,14 +398,29 @@ def generate_answer(question, sources, deep_dive=False):
     # SOCIAL SKILLS DETECTION - ADD THIS SECTION
     # ============================================================
     is_social_question = any(phrase in question.lower() for phrase in [
-        "make friend", "how to make", "friendship", "how do i", 
-        "successful marriage", "good leader", "leadership", 
-        "how to be", "social", "relationship", "getting along",
-        "make friends", "making friends", "be a good", "become a",
-        "work with", "colleagues", "coworkers", "boss", "manager",
-        "marry", "dating", "courtship", "wedding", "husband", "wife",
-        "respect", "kindness", "generosity", "help", "support"
-    ])
+    # Friendship
+    "make friend", "how to make", "friendship", "making friends", "befriend",
+    "get along", "social", "relationship", "getting along",
+    
+    # Marriage
+    "successful marriage", "marry", "wedding", "husband", "wife", "spouse",
+    "courtship", "dating", "marriage", "partner",
+    
+    # Leadership
+    "good leader", "leadership", "how to be a leader", "leader", "lead",
+    "supervisor", "manager", "boss", "chief", "naat'áanii",
+    
+    # Work
+    "work with", "colleagues", "coworkers", "workplace", "job",
+    "professional", "business",
+    
+    # Values
+    "respect", "kindness", "generosity", "help", "support", "care",
+    "how do i", "how to be", "become a", "improve", "develop",
+    
+    # Community
+    "community", "neighbor", "village", "chapter", "clan", "k'é", "family"
+])
     
     # ============================================================
     # TRY OPENAI FIRST
