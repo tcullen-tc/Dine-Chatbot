@@ -394,21 +394,58 @@ def generate_answer(question, sources, deep_dive=False):
         content = s.get('content', '')[:max_content]
         context += content + "\n"
     
-    # TRY OPENAI FIRST - this is what makes the bot smart
+    # ============================================================
+    # SOCIAL SKILLS DETECTION - ADD THIS SECTION
+    # ============================================================
+    is_social_question = any(phrase in question.lower() for phrase in [
+        "make friend", "how to make", "friendship", "how do i", 
+        "successful marriage", "good leader", "leadership", 
+        "how to be", "social", "relationship", "getting along",
+        "make friends", "making friends", "be a good", "become a",
+        "work with", "colleagues", "coworkers", "boss", "manager",
+        "marry", "dating", "courtship", "wedding", "husband", "wife",
+        "respect", "kindness", "generosity", "help", "support"
+    ])
+    
+    # ============================================================
+    # TRY OPENAI FIRST
+    # ============================================================
     if OPENAI_AVAILABLE:
         try:
             openai.api_key = os.environ.get("OPENAI_API_KEY")
             
-            # This prompt tells OpenAI to SYNTHESIZE, not just extract
-            prompt = f"""You are a helpful assistant answering questions about Diné (Navajo) culture.
+            # ====================================================
+            # SOCIAL SKILLS PROMPT - Use this for social questions
+            # ====================================================
+            if is_social_question:
+                prompt = f"""You are a helpful assistant answering questions about Diné (Navajo) culture.
+
+This question is about social relationships. Based on the Diné sources below, explain how traditional values apply to this situation.
+
+Diné values that are relevant to social relationships include:
+- K'é (kinship): Relationships are built on respect, generosity, and responsibility
+- Hózhó (harmony): Balance in all relationships creates peace and wellness
+- Community responsibility: Helping others and being present in community life
+- Respect for elders: Learning from those with wisdom and experience
+- Generosity: Sharing what you have with others
+
+SYNTHESIZE the information from the sources to give practical, helpful advice. Do not just quote the sources - combine the information to create a complete answer.
+
+SOURCES:
+{context}
+
+QUESTION: {question}
+
+ANSWER: Provide practical, helpful advice based on Diné teachings about how to {question}. Use specific examples from the sources when available. If the sources don't directly address the question, explain how Diné values would guide a person in this situation."""
+            
+            # ====================================================
+            # STANDARD PROMPT - Use for factual questions
+            # ====================================================
+            else:
+                prompt = f"""You are a helpful assistant answering questions about Diné (Navajo) culture.
 
 IMPORTANT: Your task is to SYNTHESIZE information from the sources below to answer the question. 
-Do not just quote the sources. Instead, combine the information to create a helpful, practical answer.
-
-For questions like "how to make friends" or "how to have a successful marriage":
-- Look for information about k'é (kinship), respect, generosity, community responsibility
-- Explain how these Diné values apply to the situation
-- Give practical, actionable advice based on Diné teachings
+Do not just quote the sources. Instead, combine the information to create a helpful, complete answer.
 
 Answer based ONLY on the source documents below. If the information is not in the sources, say "Based on the available sources, I don't have specific information about that."
 
@@ -422,7 +459,7 @@ ANSWER:"""
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,  # Slightly higher for more natural answers
+                temperature=0.7,  # Higher for more natural social answers
                 max_tokens=800 if deep_dive else 600
             )
             answer = response.choices[0].message.content
@@ -442,7 +479,9 @@ ANSWER:"""
             print(f"OpenAI error: {e}")
             # Fall through to fallback
     
-    # FALLBACK - simple text extraction (less helpful)
+    # ============================================================
+    # FALLBACK - simple text extraction
+    # ============================================================
     best = sources[0]
     text = best.get('content', '')
     text = re.sub(r'\s+', ' ', text)
